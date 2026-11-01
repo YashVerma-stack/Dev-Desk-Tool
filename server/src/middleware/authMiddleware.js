@@ -1,4 +1,4 @@
-
+import { isUserActive } from "../models/userModel.js";
 import jwt from "jsonwebtoken";
 import { isTokenRevoked } from "../models/tokenModel.js";
 
@@ -58,6 +58,15 @@ const authenticate = async (req, res, next) => {
       return res.status(401).json({
         success: false,
         message: "Token has been revoked. Please log in again.",
+      });
+    }
+
+    const active = await isUserActive(decoded.id);
+
+    if(!active) {
+      return res.status(401).json({
+        success: false,
+        message: "Your account is inactive or has been deleted.",
       });
     }
 
