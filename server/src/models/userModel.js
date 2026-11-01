@@ -113,3 +113,85 @@ export const isUserActive = async (userId) => {
 
   return result.rowCount > 0;
 };
+
+// Get logged-in user's profile
+export const getUserProfile = async (userId) => {
+  const query = `
+    SELECT
+      id,
+      name,
+      email,
+      role,
+      created_at,
+      updated_at
+    FROM users
+    WHERE id = $1
+      AND is_deleted = FALSE
+  `;
+
+  const result = await pool.query(query, [userId]);
+
+  return result.rows[0];
+};
+
+// Update logged-in user's profile
+export const updateUserProfile = async (
+  userId,
+  name,
+  email
+) => {
+  const query = `
+    UPDATE users
+    SET
+      name = COALESCE($1, name),
+      email = COALESCE($2, email),
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = $3
+      AND is_deleted = FALSE
+    RETURNING
+      id,
+      name,
+      email,
+      role,
+      created_at,
+      updated_at
+  `;
+
+  const result = await pool.query(query, [
+    name,
+    email,
+    userId,
+  ]);
+
+  return result.rows[0];
+};
+
+// GET user's current hashed password
+export const getUserPassword = async (userId) => {
+  const query = `
+    SELECT password
+    FROM users
+    WHERE id = $1
+      AND is_deleted = FALSE
+  `;
+
+  const result = await pool.query(query, [userId]);
+
+  return result.rows[0];
+};
+
+// UPDATE user's password
+export const updateUserPassword = async (userId, hashedPassword) => {
+  const query = `
+    UPDATE users
+    SET password = $1,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = $2
+      AND is_deleted = FALSE
+    RETURNING id, name, email, role, updated_at
+  `;
+
+  const result = await pool.query(query, [hashedPassword, userId]);
+
+  return result.rows[0];
+};
