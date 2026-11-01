@@ -106,3 +106,27 @@ ON issues(assigned_to);
 
 CREATE INDEX IF NOT EXISTS idx_issues_status
 ON issues(status);
+
+
+-- =====================================
+-- 4. REVOKED TOKENS TABLE
+-- =====================================
+
+CREATE TABLE IF NOT EXISTS revoked_tokens (
+    jti UUID PRIMARY KEY,
+
+    user_id INTEGER NOT NULL,
+
+    expires_at TIMESTAMPTZ NOT NULL,
+
+    revoked_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_revoked_token_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE
+);
+
+-- Index for token expiration cleanup
+CREATE INDEX IF NOT EXISTS idx_revoked_tokens_expiry
+ON revoked_tokens(expires_at);

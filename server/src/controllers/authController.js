@@ -1,5 +1,7 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
+import { randomUUID } from "node:crypto";
+import { revokeToken } from "../models/tokenModel.js";
 
 import {
   findUserByEmail,
@@ -82,16 +84,20 @@ export const loginUser = async (req, res) => {
     }
 
     // Generate JWT token
-    const token = jwt.sign(
-      {
-        id: user.id,
-        role: user.role,
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: process.env.JWT_EXPIRES_IN || "1d",
-      }
-    );
+    
+const token = jwt.sign(
+  {
+    id: user.id,
+    role: user.role,
+  },
+  process.env.JWT_SECRET,
+  {
+    algorithm: "HS256",
+    jwtid: randomUUID(),
+    expiresIn: process.env.JWT_EXPIRES_IN || "1d",
+  }
+);
+
 
     return res.status(200).json({
       success: true,
@@ -113,4 +119,39 @@ export const loginUser = async (req, res) => {
     });
   }
 };
+
+
+export const logoutUser = async (req, res) => {
+  try {
+    const { id, jti, exp } = req.user;
+
+    // Check required JWT claims
+    if (!jti || !exp || !id) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid token information",
+      });
+    }
+
+    // Convert JWT expiration timestamp to Date
+    const expiresAt = new Date(exp * 1000);
+
+    // Revoke the current token
+    await revokeToken(jti, id, expiresAt);
+
+    return res.status(200).json({
+      success: true,
+      message: "Logout successful",
+    });
+
+  } catch (error) {
+    console.error("Logout error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Logout failed",
+    });
+  }
+};
+
 
