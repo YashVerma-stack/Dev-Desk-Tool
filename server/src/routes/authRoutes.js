@@ -1,4 +1,5 @@
-
+import authenticate from "../middleware/authMiddleware.js";
+import authorizeRoles from "../middleware/authorizeRoles.js";
 import express from "express";
 import { registerUser, loginUser } from "../controllers/authController.js";
 import { registerSchema, loginSchema } from "../validators/authValidator.js";
@@ -45,5 +46,25 @@ router.post("/login", (req, res, next) => {
   next();
 }, loginUser);
 
+router.get("/me", authenticate, (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Authenticated successfully",
+    user: req.user,
+  });
+});
+
+router.get(
+  "/admin",
+  authenticate,
+  authorizeRoles("admin"),
+  (req, res) => {
+    res.status(200).json({
+      success: true,
+      message: "Welcome Admin! You have access.",
+      user: req.user,
+    });
+  }
+);
 
 export default router;
