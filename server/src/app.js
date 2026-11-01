@@ -1,9 +1,13 @@
-import authRoutes from "./routes/authRoutes.js";
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
+import cookieParser from "cookie-parser";
+
+import authRoutes from "./routes/authRoutes.js";
 import projectRoutes from "./routes/projectRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+
+import authenticate from "./middleware/authMiddleware.js";
 
 const app = express();
 
@@ -14,24 +18,29 @@ app.use(helmet());
 app.use(
   cors({
     origin: "http://localhost:5173",
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
   })
 );
 
-// Parse incoming JSON requests
+// Parse incoming requests
 app.use(express.json());
+app.use(cookieParser());
 
 // Health check API
 app.get("/api/health", (req, res) => {
-  res.status(200).json({
+  return res.status(200).json({
     success: true,
     message: "DevDesk API is running",
   });
 });
 
+// Authentication routes
 app.use("/api/auth", authRoutes);
-app.use("/api/projects", projectRoutes);
-app.use("/api/users", userRoutes);
+
+// Protected routes
+app.use("/api/projects", authenticate, projectRoutes);
+app.use("/api/users", authenticate, userRoutes);
 
 export default app;
