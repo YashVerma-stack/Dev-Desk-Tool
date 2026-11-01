@@ -1,0 +1,33 @@
+import authRoutes from "./routes/authRoutes.js";
+import express from "express";
+import helmet from "helmet";
+import cors from "cors";
+
+const app = express();
+
+// Security middleware
+app.use(helmet());
+
+// CORS configuration
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
+// Parse incoming JSON requests
+app.use(express.json());
+
+// Health check API
+app.get("/api/health", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "DevDesk API is running",
+  });
+});
+
+app.use("/api/auth", authRoutes);
+
+export default app;
