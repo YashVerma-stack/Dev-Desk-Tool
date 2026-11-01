@@ -37,3 +37,4 @@ export const isTokenRevoked = async (jti) => {
 
   return result.rowCount > 0;
 };
+
