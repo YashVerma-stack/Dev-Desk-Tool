@@ -1,38 +1,26 @@
-import { isUserActive } from "../models/userModel.js";
 import jwt from "jsonwebtoken";
 import { isTokenRevoked } from "../models/tokenModel.js";
+import { isUserActive } from "../models/userModel.js";
 
 const authenticate = async (req, res, next) => {
   try {
-    // 1. Get Authorization header
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({
-        success: false,
-        message: "Access token is required",
-      });
-    }
-
-    // 2. Extract token
-    const token = authHeader.split(" ")[1];
+    // Read JWT from HTTP-only cookie
+    const token = req.cookies?.token;
 
     if (!token) {
       return res.status(401).json({
         success: false,
-        message: "Access token is required",
+        message: "Authentication cookie is required",
       });
     }
 
-    // 3. Verify JWT
     let decoded;
 
+    // Verify JWT
     try {
-      decoded = jwt.verify(
-        token,
-        process.env.JWT_SECRET,
-        { algorithms: ["HS256"] }
-      );
+      decoded = jwt.verify(token, process.env.JWT_SECRET, {
+        algorithms: ["HS256"],
+      });
     } catch (error) {
       return res.status(401).json({
         success: false,
@@ -43,7 +31,7 @@ const authenticate = async (req, res, next) => {
       });
     }
 
-    // 4. Ensure token has a unique identifier
+    // Check token ID
     if (!decoded.jti) {
       return res.status(401).json({
         success: false,
@@ -51,7 +39,7 @@ const authenticate = async (req, res, next) => {
       });
     }
 
-    // 5. Check whether token was revoked
+    // Check whether token has been revoked
     const revoked = await isTokenRevoked(decoded.jti);
 
     if (revoked) {
@@ -61,21 +49,20 @@ const authenticate = async (req, res, next) => {
       });
     }
 
+    // Check whether user account is active
     const active = await isUserActive(decoded.id);
 
-    if(!active) {
+    if (!active) {
       return res.status(401).json({
         success: false,
         message: "Your account is inactive or has been deleted.",
       });
     }
 
-    // 6. Attach user information
+    // Attach authenticated user information
     req.user = decoded;
 
-    // 7. Continue
     next();
-
   } catch (error) {
     console.error("Authentication middleware error:", error);
 

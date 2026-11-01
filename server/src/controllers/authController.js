@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import { randomUUID } from "node:crypto";
 import { revokeToken } from "../models/tokenModel.js";
+import cookieOptions from "../utils/cookieOptions.js";
 
 import {
   findUserByEmail,
@@ -97,12 +98,11 @@ const token = jwt.sign(
     expiresIn: process.env.JWT_EXPIRES_IN || "1d",
   }
 );
-
+    res.cookie("token", token, cookieOptions);
 
     return res.status(200).json({
       success: true,
       message: "Login successful",
-      token,
       user: {
         id: user.id,
         name: user.name,
@@ -125,25 +125,30 @@ export const logoutUser = async (req, res) => {
   try {
     const { id, jti, exp } = req.user;
 
-    // Check required JWT claims
-    if (!jti || !exp || !id) {
+    if (!id || !jti || !exp) {
       return res.status(400).json({
         success: false,
         message: "Invalid token information",
       });
     }
 
-    // Convert JWT expiration timestamp to Date
+    // Revoke the current JWT
     const expiresAt = new Date(exp * 1000);
 
-    // Revoke the current token
     await revokeToken(jti, id, expiresAt);
+
+    // Clear authentication cookie
+    res.clearCookie("token", {
+      httpOnly: cookieOptions.httpOnly,
+      secure: cookieOptions.secure,
+      sameSite: cookieOptions.sameSite,
+      path: cookieOptions.path,
+    });
 
     return res.status(200).json({
       success: true,
       message: "Logout successful",
     });
-
   } catch (error) {
     console.error("Logout error:", error);
 
