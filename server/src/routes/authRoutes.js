@@ -1,68 +1,71 @@
+import express from "express";
+
+import {
+  registerUser,
+  loginUser,
+  logoutUser,
+} from "../controllers/authController.js";
+
 import authenticate from "../middleware/authMiddleware.js";
 import authorizeRoles from "../middleware/authorizeRoles.js";
-import express from "express";
-import { registerUser, loginUser } from "../controllers/authController.js";
-import { registerSchema, loginSchema } from "../validators/authValidator.js";
+
+import {
+  registerSchema,
+  loginSchema,
+} from "../validators/authValidator.js";
 
 const router = express.Router();
 
-router.post("/register", (req, res, next) => {
-  const result = registerSchema.safeParse(req.body);
+// Validation middleware
+const validate = (schema) => {
+  return (req, res, next) => {
+    const result = schema.safeParse(req.body);
 
-  if (!result.success) {
-    return res.status(400).json({
-      success: false,
-      message: "Validation failed",
-      errors: result.error.issues.map((issue) => ({
-        field: issue.path.join("."),
-        message: issue.message,
-      })),
-    });
-  }
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: result.error.issues.map((issue) => ({
+          field: issue.path.join("."),
+          message: issue.message,
+        })),
+      });
+    }
 
-  // Use normalized and validated data
-  req.body = result.data;
+    req.body = result.data;
+    next();
+  };
+};
 
-  next();
-}, registerUser);
+// Register a new user
+router.post("/register", validate(registerSchema), registerUser);
 
+// Login user
+router.post("/login", validate(loginSchema), loginUser);
 
-router.post("/login", (req, res, next) => {
-  const result = loginSchema.safeParse(req.body);
+// Logout user
+router.post("/logout", authenticate, logoutUser);
 
-  if (!result.success) {
-    return res.status(400).json({
-      success: false,
-      message: "Validation failed",
-      errors: result.error.issues.map((issue) => ({
-        field: issue.path.join("."),
-        message: issue.message,
-      })),
-    });
-  }
-
-  req.body = result.data;
-
-  next();
-}, loginUser);
-
+// Get currently logged-in user
 router.get("/me", authenticate, (req, res) => {
-  res.status(200).json({
+  return res.status(200).json({
     success: true,
-    message: "Authenticated successfully",
-    user: req.user,
+    user: {
+      id: req.user.id,
+      role: req.user.role,
+    },
   });
 });
 
+// Admin-only test route
 router.get(
   "/admin",
   authenticate,
   authorizeRoles("admin"),
   (req, res) => {
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message: "Welcome Admin! You have access.",
-      user: req.user,
+      message: "Welcome Admin! You have access to this route.",
     });
   }
 );
