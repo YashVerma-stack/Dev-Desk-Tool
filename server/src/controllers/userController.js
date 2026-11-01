@@ -1,9 +1,5 @@
-import {
-    getAllUsers,
-    findUserById,
-    updateUser,
-    deleteUser,
-} from "../models/userModel.js";
+import { getAllUsers, findUserById, updateUser, deleteUser, getUserProfile, updateUserProfile, getUserPassword, updateUserPassword} from "../models/userModel.js";
+import bcrypt from "bcrypt";
 
 // GET all users (Admin only)
 export const getUsers = async (req, res) => {
@@ -172,4 +168,131 @@ export const removeUser = async (req, res) => {
             message: "Failed to delete user",
         });
     }
+};
+
+// GET logged-in user's profile
+export const getMyProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const user = await getUserProfile(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    console.error("Get profile error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch profile",
+    });
+  }
+};
+
+// UPDATE logged-in user's profile
+export const editMyProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { name, email } = req.body;
+
+    const updatedUser = await updateUserProfile(
+      userId,
+      name ?? null,
+      email ?? null
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("Update profile error:", error);
+
+    if (error.code === "23505") {
+      return res.status(409).json({
+        success: false,
+        message: "Email already exists",
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update profile",
+    });
+  }
+};
+
+export const changeMyPassword = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { currentPassword, newPassword } = req.body;
+
+    // 1. Get existing password hash
+    const user = await getUserPassword(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // 2. Verify current password
+    const isPasswordCorrect = await bcrypt.compare(
+      currentPassword,
+      user.password
+    );
+
+    if (!isPasswordCorrect) {
+      return res.status(400).json({
+        success: false,
+        message: "Current password is incorrect",
+      });
+    }
+
+    // 3. Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+    // 4. Update password in database
+    const updatedUser = await updateUserPassword(
+      userId,
+      hashedPassword
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "Unable to update password",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Password changed successfully",
+    });
+  } catch (error) {
+    console.error("Change password error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
 };

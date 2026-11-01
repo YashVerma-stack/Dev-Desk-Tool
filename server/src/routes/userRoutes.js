@@ -1,16 +1,7 @@
 import express from "express";
-
-import {
-  getUsers,
-  getUser,
-  editUser,
-  removeUser,
-} from "../controllers/userController.js";
-
-import authenticate from "../middleware/authMiddleware.js";
+import { getUsers, getUser, editUser, removeUser, getMyProfile, editMyProfile, changeMyPassword} from "../controllers/userController.js";
 import authorizeRoles from "../middleware/authorizeRoles.js";
-
-import { updateUserSchema } from "../validators/userValidator.js";
+import { updateUserSchema, updateProfileSchema, changePasswordSchema } from "../validators/userValidator.js";
 
 const router = express.Router();
 
@@ -35,8 +26,32 @@ const validate = (schema) => {
   };
 };
 
-// All routes below require admin authentication
-router.use(authenticate, authorizeRoles("admin"));
+// ===================================
+// MEMBER PROFILE ROUTES
+// ===================================
+
+// GET logged-in user's profile
+router.get("/profile", getMyProfile);
+
+// UPDATE logged-in user's profile
+router.patch(
+  "/profile",
+  validate(updateProfileSchema),
+  editMyProfile
+);
+
+// CHANGE logged-in user's password
+router.patch(
+  "/change-password",
+  validate(changePasswordSchema),
+  changeMyPassword
+);
+
+// ===================================
+// ADMIN-ONLY USER MANAGEMENT ROUTES
+// ===================================
+
+router.use(authorizeRoles("admin"));
 
 // GET all users
 router.get("/", getUsers);
