@@ -2,7 +2,7 @@ import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-
+import issueRoutes from "./routes/issueRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import projectRoutes from "./routes/projectRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
@@ -42,5 +42,6 @@ app.use("/api/auth", authRoutes);
 // Protected routes
 app.use("/api/projects", authenticate, projectRoutes);
 app.use("/api/users", authenticate, userRoutes);
+app.use("/api/issues", authenticate, issueRoutes);
 
 export default app;

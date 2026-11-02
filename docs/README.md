@@ -21,20 +21,19 @@ The system provides authentication, role-based access control, user management, 
 - [Authentication and RBAC](modules/authentication-rbac.md)
 - [User Management](modules/user-management.md)
 - [Project Management](modules/project-management.md)
-- [Issue Management](modules/issue-management.md) — Upcoming
-- [Dashboard and Reporting](modules/dashboard.md) — Planned
+- [Issue Management](modules/issue-management.md)
+- Dashboard and Reporting — Planned
 
 ### 1.3 API Documentation
 
 - [Authentication API](api/authentication-api.md)
 - [User Management API](api/user-api.md)
 - [Project Management API](api/project-api.md)
-- [Issue Management API](api/issue-api.md) — Upcoming
+- [Issue Management API](api/issue-api.md)
 
 ### 1.4 Technical Documentation
 
 - [Security](security.md)
-- [Testing Strategy](testing.md)
 
 ---
 
@@ -45,6 +44,7 @@ The system provides authentication, role-based access control, user management, 
 - React
 - Vite
 - JavaScript
+- Tailwind CSS
 
 ### Backend
 
@@ -72,6 +72,7 @@ The system provides authentication, role-based access control, user management, 
 - Zod
 - Vitest
 - Supertest
+- Postman
 
 ---
 
@@ -82,7 +83,7 @@ The system provides authentication, role-based access control, user management, 
 | Authentication and RBAC | Completed |
 | User Management | Completed |
 | Project Management | Completed |
-| Issue Management | Upcoming |
+| Issue Management | Completed |
 | Dashboard and Reporting | Planned |
 | Testing and Security Review | In Progress |
 | Final Integration and Deployment | Planned |
@@ -108,6 +109,8 @@ The system provides authentication, role-based access control, user management, 
 - Restore deleted accounts
 - View and update personal profiles
 - Change passwords
+- Prevent deletion of the last active member of a project
+- Prevent unauthorized role changes for members assigned to projects
 
 ### Project Management
 
@@ -118,7 +121,31 @@ The system provides authentication, role-based access control, user management, 
 - Add and remove project members
 - Prevent duplicate member assignments
 - Prevent removal of the last active project member
+- Validate active project members during assignment
 - Use database transactions for important project operations
+
+### Issue Management
+
+- Create issues within projects
+- Retrieve all accessible issues
+- Retrieve individual issues by ID
+- Update issue titles and descriptions
+- Manage issue statuses:
+  - Open
+  - In Progress
+  - Resolved
+  - Closed
+- Manage issue priorities:
+  - Critical
+  - High
+  - Medium
+  - Low
+- Assign and reassign issues to project members
+- Remove issue assignments
+- Restrict issue access based on project membership
+- Allow only administrators to delete issues
+- Validate issue data using Zod
+- Maintain data integrity using PostgreSQL constraints and transactions
 
 ---
 
@@ -132,18 +159,24 @@ The application aims to improve team organization, task visibility, accountabili
 
 ## 6. Future Development
 
-The next development phase will focus on Issue Management.
+The next development phase will focus on Dashboard and Reporting.
 
 Planned functionality includes:
 
-- Issue creation and tracking
-- Issue assignment to project members
-- Issue status management
-- Issue priority management
-- Issue updates and comments
-- Issue filtering and searching
+- Admin dashboard
+- Total users and project statistics
+- Total issues and issue status statistics
+- Priority-wise issue summaries
+- Project-wise issue summaries
+- Recent activities
+- Dashboard data visualization
 
-Dashboard and reporting functionality will be developed after the core issue management workflow is implemented.
+Further development will also include:
+
+- Frontend integration for all implemented backend modules
+- Final application integration
+- Security and performance review
+- Application deployment
 
 ---
 
@@ -162,3 +195,13 @@ Each module follows this workflow:
 7. Document the completed functionality.
 
 This approach helps maintain code quality, security, consistency, and maintainability throughout development.
+
+---
+
+## 8. Current Project Status
+
+The Authentication and RBAC, User Management, Project Management, and Issue Management backend modules have been implemented.
+
+The Issue Management module passed all 20 planned manual verification tests using Postman and PostgreSQL.
+
+The next major development phase is Dashboard and Reporting, followed by frontend integration, final testing, and deployment.
