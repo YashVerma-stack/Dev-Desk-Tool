@@ -1,34 +1,68 @@
-
 import {
-  createProject,
+  assignMembersToProject,
+  getProjectMembers,
+  removeMemberFromProject,
+} from "../models/projectMemberModel.js";
+import {
+  createProjectWithMembers,
   getAllProjects,
   getProjectById,
   updateProject,
   deleteProject,
 } from "../models/projectModel.js";
 
-
+import { isActiveMember } from "../models/userModel.js";
 
 const getProjectAccess = (req) => ({
   userId: req.user.id,
   isAdmin: req.user.role === "admin",
 });
 
+
 // 1. Create Project
+
 export const createProjectController = async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { name, description, memberIds } = req.body;
 
-    const project = await createProject(
+    // Basic memberIds validation
+    if (!Array.isArray(memberIds) || memberIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one project member is required",
+      });
+    }
+
+    for (const memberId of memberIds) {
+      if (!Number.isSafeInteger(memberId) || memberId <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid member ID",
+        });
+      }
+    }
+
+    // Create project and assign members in one transaction
+    const result = await createProjectWithMembers(
       name,
       description,
-      req.user.id
+      req.user.id,
+      memberIds
     );
 
+    // Handle invalid member
+    if (result.status === "invalid_member") {
+      return res.status(400).json({
+        success: false,
+        message: `User ${result.memberId} is not an active member`,
+      });
+    }
+
+    // Successful project creation
     return res.status(201).json({
       success: true,
-      message: "Project created successfully",
-      project,
+      message: "Project created and members assigned successfully",
+      project: result.project,
     });
   } catch (error) {
     console.error("Create project error:", error.message);
@@ -39,6 +73,8 @@ export const createProjectController = async (req, res) => {
     });
   }
 };
+
+
 
 
 // 2. Get All Projects
@@ -105,6 +141,161 @@ export const getProjectController = async (req, res) => {
   }
 };
 
+// 6. Get Project Members
+export const getProjectMembersController = async (req, res) => {
+  try {
+    const projectId = Number(req.params.id);
+
+    if (!Number.isSafeInteger(projectId) || projectId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project ID",
+      });
+    }
+
+    const { userId, isAdmin } = getProjectAccess(req);
+
+    // Check whether the user can access this project
+    const project = await getProjectById(
+      projectId,
+      userId,
+      isAdmin
+    );
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: "Project not found or access denied",
+      });
+    }
+
+    const members = await getProjectMembers(projectId);
+
+    return res.status(200).json({
+      success: true,
+      count: members.length,
+      members,
+    });
+  } catch (error) {
+    console.error("Get project members error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch project members",
+    });
+  }
+};
+
+// 7. Remove Member From Project
+export const removeProjectMemberController = async (req, res) => {
+  try {
+    const projectId = Number(req.params.id);
+    const userId = Number(req.params.userId);
+
+    if (
+      !Number.isSafeInteger(projectId) ||
+      projectId <= 0 ||
+      !Number.isSafeInteger(userId) ||
+      userId <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project ID or user ID",
+      });
+    }
+
+    const result = await removeMemberFromProject(
+      projectId,
+      userId
+    );
+
+    if (result.status === "project_not_found") {
+      return res.status(404).json({
+        success: false,
+        message: "Project not found",
+      });
+    }
+
+    if (result.status === "assignment_not_found") {
+      return res.status(404).json({
+        success: false,
+        message: "Member is not assigned to this project",
+      });
+    }
+
+    if (result.status === "last_member") {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot remove the last active member from a project",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Member removed from project successfully",
+      assignment: result.assignment,
+    });
+  } catch (error) {
+    console.error("Remove project member error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to remove member from project",
+    });
+  }
+};
+
+// 8. Assign Members To Existing Project
+export const assignProjectMembersController = async (req, res) => {
+  try {
+    const projectId = Number(req.params.id);
+    const { memberIds } = req.body;
+
+    if (!Number.isSafeInteger(projectId) || projectId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project ID",
+      });
+    }
+
+    
+
+    // Assign members using a transaction
+    const result = await assignMembersToProject(
+      projectId,
+      memberIds
+    );
+
+    if (result.status === "project_not_found") {
+      return res.status(404).json({
+        success: false,
+        message: "Project not found",
+      });
+    }
+
+    if (result.status === "invalid_member") {
+  return res.status(400).json({
+    success: false,
+    message: `User ${result.memberId} is not an active member`,
+  });
+}
+
+    return res.status(200).json({
+      success: true,
+      message: "Project members assigned successfully",
+      assignedCount: result.assignedMembers.length,
+      assignedMembers: result.assignedMembers,
+    });
+  } catch (error) {
+    console.error("Assign project members error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to assign project members",
+    });
+  }
+};
+
 
 // 4. Update Project
 export const updateProjectController = async (req, res) => {
@@ -119,12 +310,9 @@ export const updateProjectController = async (req, res) => {
     }
 
     const { name, description } = req.body;
-    const { userId, isAdmin } = getProjectAccess(req);
 
     const project = await updateProject(
       projectId,
-      userId,
-      isAdmin,
       name,
       description
     );
@@ -132,7 +320,7 @@ export const updateProjectController = async (req, res) => {
     if (!project) {
       return res.status(404).json({
         success: false,
-        message: "Project not found or access denied",
+        message: "Project not found",
       });
     }
 
@@ -164,18 +352,12 @@ export const deleteProjectController = async (req, res) => {
       });
     }
 
-    const { userId, isAdmin } = getProjectAccess(req);
-
-    const project = await deleteProject(
-      projectId,
-      userId,
-      isAdmin
-    );
+    const project = await deleteProject(projectId);
 
     if (!project) {
       return res.status(404).json({
         success: false,
-        message: "Project not found or access denied",
+        message: "Project not found",
       });
     }
 

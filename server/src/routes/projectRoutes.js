@@ -1,7 +1,7 @@
 
 import express from "express";
 
-import authenticate from "../middleware/authMiddleware.js";
+import authorizeRoles from "../middleware/authorizeRoles.js";
 
 import {
   createProjectController,
@@ -9,11 +9,15 @@ import {
   getProjectController,
   updateProjectController,
   deleteProjectController,
+  getProjectMembersController,
+  removeProjectMemberController,
+  assignProjectMembersController,
 } from "../controllers/projectController.js";
 
 import {
   createProjectSchema,
   updateProjectSchema,
+  assignProjectMembersSchema,
 } from "../validators/projectValidator.js";
 
 const router = express.Router();
@@ -39,40 +43,54 @@ const validate = (schema) => {
   };
 };
 
-// Create project
+// ===================================
+// PROJECT ROUTES
+// ===================================
+
+// Create project - Admin only
 router.post(
   "/",
-  authenticate,
+  authorizeRoles("admin"),
   validate(createProjectSchema),
   createProjectController
 );
 
-// Get all accessible projects
-router.get(
-  "/",
-  authenticate,
-  getAllProjectsController
+// Get accessible projects - Admin and Member
+router.get("/", getAllProjectsController);
+
+// Get single accessible project - Admin and Member
+router.get("/:id", getProjectController);
+
+// Get project team members - Admin and assigned Members
+router.get("/:id/members", getProjectMembersController);
+
+// Assign additional members - Admin only
+router.post(
+  "/:id/members",
+  authorizeRoles("admin"),
+  validate(assignProjectMembersSchema),
+  assignProjectMembersController
 );
 
-// Get single project
-router.get(
-  "/:id",
-  authenticate,
-  getProjectController
+// Remove member from project - Admin only
+router.delete(
+  "/:id/members/:userId",
+  authorizeRoles("admin"),
+  removeProjectMemberController
 );
 
-// Update project
+// Update project - Admin only
 router.patch(
   "/:id",
-  authenticate,
+  authorizeRoles("admin"),
   validate(updateProjectSchema),
   updateProjectController
 );
 
-// Delete project
+// Delete project - Admin only
 router.delete(
   "/:id",
-  authenticate,
+  authorizeRoles("admin"),
   deleteProjectController
 );
 
