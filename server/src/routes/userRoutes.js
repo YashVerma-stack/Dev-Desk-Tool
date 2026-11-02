@@ -1,5 +1,14 @@
 import express from "express";
-import { getUsers, getUser, editUser, removeUser, getMyProfile, editMyProfile, changeMyPassword} from "../controllers/userController.js";
+import {
+  getUsers,
+  getUser,
+  editUser,
+  removeUser,
+  getMyProfile,
+  editMyProfile,
+  changeMyPassword,
+  restoreUserController,
+} from "../controllers/userController.js";
 import authorizeRoles from "../middleware/authorizeRoles.js";
 import { updateUserSchema, updateProfileSchema, changePasswordSchema } from "../validators/userValidator.js";
 
@@ -64,5 +73,8 @@ router.patch("/:id", validate(updateUserSchema), editUser);
 
 // DELETE user
 router.delete("/:id", removeUser);
+
+// RESTORE soft-deleted user
+router.patch("/:id/restore", restoreUserController);
 
 export default router;

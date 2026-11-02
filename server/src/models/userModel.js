@@ -48,10 +48,10 @@ export const getAllUsers = async () => {
 // Find user by ID
 export const findUserById = async (userId) => {
   const query = `
-    SELECT id, name, email, role, created_at, updated_at
-    FROM users
-    WHERE id = $1
-  `;
+  SELECT id, name, email, role, is_deleted, created_at, updated_at
+  FROM users
+  WHERE id = $1
+`;
 
   const result = await pool.query(query, [userId]);
 
@@ -59,44 +59,142 @@ export const findUserById = async (userId) => {
 };
 
 // Update user details
+
+
 export const updateUser = async (userId, name, email, role) => {
-  const query = `
-    UPDATE users
-    SET
-      name = COALESCE($1, name),
-      email = COALESCE($2, email),
-      role = COALESCE($3, role),
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = $4
-    RETURNING id, name, email, role, created_at, updated_at
-  `;
+  const client = await pool.connect();
 
-  const result = await pool.query(query, [
-    name,
-    email,
-    role,
-    userId,
-  ]);
+  try {
+    await client.query("BEGIN");
 
-  return result.rows[0];
+    // Lock all projects currently assigned to this user
+    const projectResult = await client.query(
+      `SELECT p.id
+       FROM projects p
+       JOIN project_members pm ON pm.project_id = p.id
+       WHERE pm.user_id = $1
+       ORDER BY p.id
+       FOR UPDATE OF p`,
+      [userId]
+    );
+
+    // Lock the user after locking projects
+    const userResult = await client.query(
+      `SELECT id, role, is_deleted
+       FROM users
+       WHERE id = $1
+       FOR UPDATE`,
+      [userId]
+    );
+
+    if (userResult.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return { status: "not_found" };
+    }
+
+    const currentUser = userResult.rows[0];
+
+    // Prevent an assigned active member from becoming an admin
+    if (
+      currentUser.role === "member" &&
+      role === "admin" &&
+      !currentUser.is_deleted &&
+      projectResult.rowCount > 0
+    ) {
+      await client.query("ROLLBACK");
+      return { status: "assigned_member" };
+    }
+
+    // Update user details
+    const result = await client.query(
+      `UPDATE users
+       SET
+         name = COALESCE($1, name),
+         email = COALESCE($2, email),
+         role = COALESCE($3, role),
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = $4
+       RETURNING id, name, email, role, created_at, updated_at`,
+      [name, email, role, userId]
+    );
+
+    await client.query("COMMIT");
+
+    return {
+      status: "updated",
+      user: result.rows[0],
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 
-// Soft delete user
+
+// Soft delete user safely
 export const deleteUser = async (userId) => {
-  const query = `
-    UPDATE users
-    SET
-      is_deleted = TRUE,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = $1
-      AND is_deleted = FALSE
-    RETURNING id, name, email, role, is_deleted
-  `;
+  const client = await pool.connect();
 
-  const result = await pool.query(query, [userId]);
+  try {
+    await client.query("BEGIN");
 
-  return result.rows[0];
+    // Find projects where this user is an active member
+    const projectResult = await client.query(
+      `SELECT p.id
+      FROM projects p
+      JOIN project_members pm ON pm.project_id = p.id
+      WHERE pm.user_id = $1
+      ORDER BY p.id
+      FOR UPDATE OF p`,
+      [userId]
+    );
+
+    // Check each affected project
+    for (const project of projectResult.rows) {
+      const countResult = await client.query(
+        `SELECT COUNT(*)::int AS total
+         FROM project_members pm
+         JOIN users u ON pm.user_id = u.id
+         WHERE pm.project_id = $1
+           AND u.is_deleted = FALSE`,
+        [project.id]
+      );
+
+      if (countResult.rows[0].total <= 1) {
+        await client.query("ROLLBACK");
+
+        return {
+          status: "last_member",
+        };
+      }
+    }
+
+    // Soft delete the user
+    const result = await client.query(
+      `UPDATE users
+       SET is_deleted = TRUE,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+         AND is_deleted = FALSE
+       RETURNING id, name, email, role, is_deleted`,
+      [userId]
+    );
+
+    await client.query("COMMIT");
+
+    return {
+      status: "deleted",
+      user: result.rows[0],
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 
@@ -194,4 +292,36 @@ export const updateUserPassword = async (userId, hashedPassword) => {
   const result = await pool.query(query, [hashedPassword, userId]);
 
   return result.rows[0];
+};
+
+
+// RESTORE a soft-deleted user
+export const restoreUser = async (userId) => {
+  const query = `
+    UPDATE users
+    SET is_deleted = FALSE,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = $1
+      AND is_deleted = TRUE
+    RETURNING id, name, email, role, is_deleted, updated_at
+  `;
+
+  const result = await pool.query(query, [userId]);
+
+  return result.rows[0];
+};
+
+// CHECK whether a user is an active member
+export const isActiveMember = async (userId) => {
+  const query = `
+    SELECT id
+    FROM users
+    WHERE id = $1
+      AND role = 'member'
+      AND is_deleted = FALSE
+  `;
+
+  const result = await pool.query(query, [userId]);
+
+  return result.rowCount > 0;
 };
