@@ -1,3 +1,4 @@
+
 import {
   BrowserRouter,
   Routes,
@@ -5,65 +6,74 @@ import {
   Navigate,
 } from "react-router-dom";
 
-// Authentication pages
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 
-// Admin pages
 import Dashboard from "./pages/admin/Dashboard";
 import Projects from "./pages/admin/Projects";
 import Issues from "./pages/admin/Issues";
 import Users from "./pages/admin/Users";
 
-// Layout
 import DashboardLayout from "./components/layout/DashboardLayout";
+import ProtectedRoute from "./routes/ProtectedRoute";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public routes */}
         <Route path="/" element={<Navigate to="/login" replace />} />
-
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
+        {/* Protected routes */}
         <Route
           path="/dashboard"
           element={
-            <DashboardLayout>
-              <Dashboard />
-            </DashboardLayout>
+            <ProtectedRoute>
+              <DashboardLayout>
+                <Dashboard />
+              </DashboardLayout>
+            </ProtectedRoute>
           }
         />
 
         <Route
           path="/projects"
           element={
-            <DashboardLayout>
-              <Projects />
-            </DashboardLayout>
+            <ProtectedRoute>
+              <DashboardLayout>
+                <Projects />
+              </DashboardLayout>
+            </ProtectedRoute>
           }
         />
 
         <Route
           path="/issues"
           element={
-            <DashboardLayout>
-              <Issues />
-            </DashboardLayout>
+            <ProtectedRoute>
+              <DashboardLayout>
+                <Issues />
+              </DashboardLayout>
+            </ProtectedRoute>
           }
         />
 
+        {/* Admin-only route */}
         <Route
           path="/users"
           element={
-            <DashboardLayout>
-              <Users />
-            </DashboardLayout>
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <DashboardLayout>
+                <Users />
+              </DashboardLayout>
+            </ProtectedRoute>
           }
         />
 
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        {/* Unknown routes */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
   );
