@@ -1,4 +1,3 @@
-
 import {
   BrowserRouter,
   Routes,
@@ -14,6 +13,7 @@ import Register from "./pages/auth/Register";
 import Dashboard from "./pages/admin/Dashboard";
 import Projects from "./pages/admin/Projects";
 import Issues from "./pages/admin/Issues";
+import Users from "./pages/admin/Users";
 
 // Layout
 import DashboardLayout from "./components/layout/DashboardLayout";
@@ -22,17 +22,11 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Default route */}
-        <Route
-          path="/"
-          element={<Navigate to="/login" replace />}
-        />
+        <Route path="/" element={<Navigate to="/login" replace />} />
 
-        {/* Authentication routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* Dashboard */}
         <Route
           path="/dashboard"
           element={
@@ -42,7 +36,6 @@ function App() {
           }
         />
 
-        {/* Projects */}
         <Route
           path="/projects"
           element={
@@ -52,7 +45,6 @@ function App() {
           }
         />
 
-        {/* Issues */}
         <Route
           path="/issues"
           element={
@@ -62,11 +54,16 @@ function App() {
           }
         />
 
-        {/* Unknown routes */}
         <Route
-          path="*"
-          element={<Navigate to="/login" replace />}
+          path="/users"
+          element={
+            <DashboardLayout>
+              <Users />
+            </DashboardLayout>
+          }
         />
+
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
   );
