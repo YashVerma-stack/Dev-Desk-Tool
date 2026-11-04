@@ -13,6 +13,7 @@ import Dashboard from "./pages/admin/Dashboard";
 import Projects from "./pages/admin/Projects";
 import Issues from "./pages/admin/Issues";
 import Users from "./pages/admin/Users";
+import Profile from "./pages/Profile";
 
 import DashboardLayout from "./components/layout/DashboardLayout";
 import ProtectedRoute from "./routes/ProtectedRoute";
@@ -67,6 +68,18 @@ function App() {
             <ProtectedRoute allowedRoles={["admin"]}>
               <DashboardLayout>
                 <Users />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Profile route - All authenticated users */}
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout>
+                <Profile />
               </DashboardLayout>
             </ProtectedRoute>
           }

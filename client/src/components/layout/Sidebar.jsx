@@ -71,7 +71,6 @@ function Sidebar() {
     } catch (error) {
       console.error("Logout failed:", error);
 
-      // Keep the user logged in if backend logout fails.
       alert(
         error.response?.data?.message ||
         "Unable to logout. Please try again."
