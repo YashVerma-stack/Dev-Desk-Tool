@@ -411,3 +411,17 @@ export const getUserWorkDetails = async (userId) => {
     assignedIssues: issuesResult.rows,
   };
 };
+
+// GET IDs OF ALL ACTIVE ADMINS
+export const getActiveAdminIds = async () => {
+  const query = `
+    SELECT id
+    FROM users
+    WHERE role = 'admin'
+      AND is_deleted = FALSE
+  `;
+
+  const result = await pool.query(query);
+
+  return result.rows.map((admin) => admin.id);
+};

@@ -1,5 +1,10 @@
 
-import { useState } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+
 import {
   Bell,
   Search,
@@ -9,6 +14,9 @@ import {
   LogOut,
   X,
   UserCircle,
+  Check,
+  CheckCheck,
+  LoaderCircle,
 } from "lucide-react";
 
 import Sidebar from "./Sidebar";
@@ -19,6 +27,13 @@ import {
   updateMyProfile,
   changeMyPassword,
 } from "../../services/userService";
+
+import {
+  getNotifications,
+  getUnreadCount,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+} from "../../services/notificationService";
 
 function DashboardLayout({ children }) {
   const { user, setUser, logout } = useAuth();
@@ -42,6 +57,14 @@ function DashboardLayout({ children }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
+  // Notification states
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notificationLoading, setNotificationLoading] = useState(false);
+  const [notificationActionLoading, setNotificationActionLoading] =
+    useState(false);
+
   // Generate user initials
   const getInitials = (name) => {
     if (!name) return "U";
@@ -54,6 +77,106 @@ function DashboardLayout({ children }) {
       .substring(0, 2)
       .toUpperCase();
   };
+
+  // ==========================================
+  // NOTIFICATION FUNCTIONALITY
+  // ==========================================
+
+  // Fetch notifications and unread count
+  const fetchNotifications = useCallback(async (showLoading = false) => {
+    if (showLoading) {
+      setNotificationLoading(true);
+    }
+
+    try {
+      const [notificationResponse, countResponse] = await Promise.all([
+        getNotifications(),
+        getUnreadCount(),
+      ]);
+
+      setNotifications(notificationResponse.notifications || []);
+      setUnreadCount(countResponse.unreadCount || 0);
+    } catch (error) {
+      console.error(
+        "Failed to fetch notifications:",
+        error.response?.data?.message || error.message
+      );
+    } finally {
+      if (showLoading) {
+        setNotificationLoading(false);
+      }
+    }
+  }, []);
+
+  // Initial fetch and automatic polling every 15 seconds
+  useEffect(() => {
+    fetchNotifications();
+
+    const interval = setInterval(() => {
+      fetchNotifications();
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
+  // Open/close notification dropdown
+  const handleNotificationToggle = () => {
+    const nextState = !notificationOpen;
+
+    setNotificationOpen(nextState);
+
+    if (nextState) {
+      fetchNotifications(true);
+    }
+  };
+
+  // Mark individual notification as read
+  const handleMarkAsRead = async (notificationId) => {
+    try {
+      await markNotificationAsRead(notificationId);
+      await fetchNotifications();
+    } catch (error) {
+      console.error(
+        "Failed to mark notification as read:",
+        error.response?.data?.message || error.message
+      );
+    }
+  };
+
+  // Mark all notifications as read
+  const handleMarkAllAsRead = async () => {
+    if (unreadCount === 0 || notificationActionLoading) return;
+
+    setNotificationActionLoading(true);
+
+    try {
+      await markAllNotificationsAsRead();
+      await fetchNotifications();
+    } catch (error) {
+      console.error(
+        "Failed to mark all notifications as read:",
+        error.response?.data?.message || error.message
+      );
+    } finally {
+      setNotificationActionLoading(false);
+    }
+  };
+
+  // Format notification timestamp
+  const formatNotificationTime = (date) => {
+    const notificationDate = new Date(date);
+
+    return notificationDate.toLocaleString([], {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  // ==========================================
+  // PROFILE FUNCTIONALITY
+  // ==========================================
 
   // Open Profile Details
   const openAccountProfile = async () => {
@@ -186,8 +309,13 @@ function DashboardLayout({ children }) {
   // Logout
   const handleLogout = async () => {
     setDropdownOpen(false);
+    setNotificationOpen(false);
     await logout();
   };
+
+  // ==========================================
+  // UI
+  // ==========================================
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
@@ -215,15 +343,176 @@ function DashboardLayout({ children }) {
           {/* Right Section */}
           <div className="flex items-center gap-6">
 
-            {/* Notification */}
-            <button
-              type="button"
-              className="relative rounded-full p-2 text-gray-500 hover:bg-gray-100"
-            >
-              <Bell size={21} />
+            {/* Notification Dropdown */}
+            <div className="relative">
 
-              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500" />
-            </button>
+              <button
+                type="button"
+                onClick={handleNotificationToggle}
+                className="relative rounded-full p-2 text-gray-500 transition hover:bg-gray-100"
+              >
+                <Bell size={21} />
+
+                {unreadCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Notification Panel */}
+              {notificationOpen && (
+                <div className="absolute right-0 top-12 z-50 w-[380px] max-w-[90vw] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+
+                  {/* Header */}
+                  <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+
+                    <div>
+                      <h3 className="font-semibold text-gray-800">
+                        Notifications
+                      </h3>
+
+                      <p className="text-xs text-gray-500">
+                        {unreadCount} unread notifications
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleMarkAllAsRead}
+                      disabled={
+                        unreadCount === 0 ||
+                        notificationActionLoading
+                      }
+                      className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {notificationActionLoading ? (
+                        <LoaderCircle
+                          size={15}
+                          className="animate-spin"
+                        />
+                      ) : (
+                        <CheckCheck size={15} />
+                      )}
+
+                      Mark all read
+                    </button>
+
+                  </div>
+
+                  {/* Notification List */}
+                  <div className="max-h-[420px] overflow-y-auto">
+
+                    {notificationLoading ? (
+                      <div className="flex items-center justify-center gap-2 py-10 text-sm text-gray-500">
+                        <LoaderCircle
+                          size={18}
+                          className="animate-spin"
+                        />
+
+                        Loading notifications...
+                      </div>
+                    ) : notifications.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+
+                        <Bell size={30} className="mb-2" />
+
+                        <p className="text-sm font-medium">
+                          No notifications yet
+                        </p>
+
+                        <p className="mt-1 text-xs">
+                          You're all caught up!
+                        </p>
+
+                      </div>
+                    ) : (
+                      notifications.map((notification) => (
+                        <div
+                          key={notification.id}
+                          className={`flex gap-3 border-b border-gray-100 px-4 py-4 transition hover:bg-gray-50 ${
+                            !notification.is_read
+                              ? "bg-blue-50/50"
+                              : ""
+                          }`}
+                        >
+
+                          {/* Read/Unread Indicator */}
+                          <div className="mt-1">
+                            <span
+                              className={`block h-2.5 w-2.5 rounded-full ${
+                                notification.is_read
+                                  ? "bg-gray-300"
+                                  : "bg-blue-500"
+                              }`}
+                            />
+                          </div>
+
+                          {/* Notification Content */}
+                          <div className="min-w-0 flex-1">
+
+                            <div className="flex items-start justify-between gap-2">
+
+                              <h4 className="text-sm font-semibold text-gray-800">
+                                {notification.title}
+                              </h4>
+
+                              {!notification.is_read && (
+                                <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                                  New
+                                </span>
+                              )}
+
+                            </div>
+
+                            <p className="mt-1 break-words text-sm text-gray-600">
+                              {notification.message}
+                            </p>
+
+                            <div className="mt-2 flex items-center justify-between gap-2">
+
+                              <span className="text-xs text-gray-400">
+                                {formatNotificationTime(
+                                  notification.created_at
+                                )}
+                              </span>
+
+                              {!notification.is_read && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleMarkAsRead(notification.id)
+                                  }
+                                  className="flex shrink-0 items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                                >
+                                  <Check size={13} />
+                                  Mark as read
+                                </button>
+                              )}
+
+                            </div>
+
+                          </div>
+
+                        </div>
+                      ))
+                    )}
+
+                  </div>
+
+                  {/* Footer */}
+                  {notifications.length > 0 && (
+                    <div className="border-t border-gray-100 px-4 py-3 text-center">
+                      <p className="text-xs text-gray-400">
+                        Showing your latest {notifications.length} notifications
+                      </p>
+                    </div>
+                  )}
+
+                </div>
+              )}
+
+            </div>
 
             {/* Profile Dropdown */}
             <div className="relative">
@@ -311,7 +600,9 @@ function DashboardLayout({ children }) {
 
                 </div>
               )}
+
             </div>
+
           </div>
         </header>
 
@@ -330,6 +621,7 @@ function DashboardLayout({ children }) {
 
             {/* Modal Header */}
             <div className="mb-6 flex items-center justify-between">
+
               <h2 className="text-xl font-semibold text-gray-800">
                 {modal === "account-profile"
                   ? "My Profile"
@@ -348,6 +640,7 @@ function DashboardLayout({ children }) {
               >
                 <X size={20} />
               </button>
+
             </div>
 
             {/* Account Profile Details */}
@@ -359,6 +652,7 @@ function DashboardLayout({ children }) {
 
                 {/* User Avatar */}
                 <div className="flex flex-col items-center py-3">
+
                   <div className="flex h-20 w-20 items-center justify-center rounded-full bg-blue-100 text-2xl font-semibold text-blue-700">
                     {getInitials(accountProfile.name)}
                   </div>
@@ -370,6 +664,7 @@ function DashboardLayout({ children }) {
                   <span className="mt-1 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium capitalize text-blue-700">
                     {accountProfile.role}
                   </span>
+
                 </div>
 
                 {/* User ID */}
@@ -448,7 +743,9 @@ function DashboardLayout({ children }) {
                   <input
                     value={
                       accountProfile.created_at
-                        ? new Date(accountProfile.created_at).toLocaleString()
+                        ? new Date(
+                            accountProfile.created_at
+                          ).toLocaleString()
                         : "Not available"
                     }
                     readOnly
@@ -465,7 +762,9 @@ function DashboardLayout({ children }) {
                   <input
                     value={
                       accountProfile.updated_at
-                        ? new Date(accountProfile.updated_at).toLocaleString()
+                        ? new Date(
+                            accountProfile.updated_at
+                          ).toLocaleString()
                         : "Not available"
                     }
                     readOnly
@@ -554,6 +853,7 @@ function DashboardLayout({ children }) {
                   ["confirmPassword", "Confirm New Password"],
                 ].map(([field, label]) => (
                   <div key={field}>
+
                     <label className="mb-1 block text-sm font-medium text-gray-700">
                       {label}
                     </label>
@@ -570,6 +870,7 @@ function DashboardLayout({ children }) {
                       }
                       className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
                     />
+
                   </div>
                 ))}
 

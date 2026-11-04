@@ -11,13 +11,36 @@ import {
   deleteProject,
 } from "../models/projectModel.js";
 
-import { isActiveMember } from "../models/userModel.js";
+import { createNotification } from "../models/notificationModel.js";
+
+
 
 const getProjectAccess = (req) => ({
   userId: req.user.id,
   isAdmin: req.user.role === "admin",
 });
 
+const notifyProjectMembers = async (members, project) => {
+  const results = await Promise.allSettled(
+    members.map((member) =>
+      createNotification({
+        userId: member.user_id ?? member.id,
+        title: "New Project Assigned",
+        message: `You have been added to the project "${project.name}".`,
+        type: "project_assigned",
+      })
+    )
+  );
+
+  results.forEach((result) => {
+    if (result.status === "rejected") {
+      console.error(
+        "Project notification creation failed:",
+        result.reason.message
+      );
+    }
+  });
+};
 
 // 1. Create Project
 
@@ -25,7 +48,6 @@ export const createProjectController = async (req, res) => {
   try {
     const { name, description, memberIds } = req.body;
 
-    // Basic memberIds validation
     if (!Array.isArray(memberIds) || memberIds.length === 0) {
       return res.status(400).json({
         success: false,
@@ -42,7 +64,6 @@ export const createProjectController = async (req, res) => {
       }
     }
 
-    // Create project and assign members in one transaction
     const result = await createProjectWithMembers(
       name,
       description,
@@ -50,7 +71,6 @@ export const createProjectController = async (req, res) => {
       memberIds
     );
 
-    // Handle invalid member
     if (result.status === "invalid_member") {
       return res.status(400).json({
         success: false,
@@ -58,7 +78,16 @@ export const createProjectController = async (req, res) => {
       });
     }
 
-    // Successful project creation
+    if (result.status !== "created") {
+      throw new Error("Unexpected project creation result");
+    }
+
+    // Notify all assigned members after successful project creation
+    await notifyProjectMembers(
+      memberIds.map((id) => ({ user_id: id })),
+      result.project
+    );
+
     return res.status(201).json({
       success: true,
       message: "Project created and members assigned successfully",
@@ -258,9 +287,22 @@ export const assignProjectMembersController = async (req, res) => {
       });
     }
 
-    
+    if (!Array.isArray(memberIds) || memberIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one project member is required",
+      });
+    }
 
-    // Assign members using a transaction
+    for (const memberId of memberIds) {
+      if (!Number.isSafeInteger(memberId) || memberId <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid member ID",
+        });
+      }
+    }
+
     const result = await assignMembersToProject(
       projectId,
       memberIds
@@ -274,11 +316,32 @@ export const assignProjectMembersController = async (req, res) => {
     }
 
     if (result.status === "invalid_member") {
-  return res.status(400).json({
-    success: false,
-    message: `User ${result.memberId} is not an active member`,
-  });
-}
+      return res.status(400).json({
+        success: false,
+        message: `User ${result.memberId} is not an active member`,
+      });
+    }
+
+    if (result.status !== "assigned") {
+      throw new Error("Unexpected member assignment result");
+    }
+
+    // Get project details for the notification message
+    if (result.assignedMembers.length > 0) {
+      const project = await getProjectById(
+        projectId,
+        req.user.id,
+        true
+      );
+
+      // Notify only newly assigned members
+      if (project) {
+        await notifyProjectMembers(
+          result.assignedMembers,
+          project
+        );
+      }
+    }
 
     return res.status(200).json({
       success: true,

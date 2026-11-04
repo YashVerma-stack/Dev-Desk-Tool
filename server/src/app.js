@@ -7,6 +7,8 @@ import authRoutes from "./routes/authRoutes.js";
 import projectRoutes from "./routes/projectRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
+
 
 import authenticate from "./middleware/authMiddleware.js";
 
@@ -45,5 +47,6 @@ app.use("/api/projects", authenticate, projectRoutes);
 app.use("/api/users", authenticate, userRoutes);
 app.use("/api/issues", authenticate, issueRoutes);
 app.use("/api/dashboard", authenticate, dashboardRoutes);
+app.use("/api/notifications", authenticate, notificationRoutes);
 
 export default app;
