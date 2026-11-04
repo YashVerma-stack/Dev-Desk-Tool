@@ -1,83 +1,140 @@
 
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
 import {
   FolderKanban,
   ClipboardList,
   Clock,
-  CheckCircle,
+  Users,
   ArrowUpRight,
   MoreHorizontal,
 } from "lucide-react";
 
-const stats = [
-  {
-    title: "Total Projects",
-    value: "24",
-    icon: FolderKanban,
-    color: "bg-blue-100 text-blue-600",
-  },
-  {
-    title: "Total Issues",
-    value: "86",
-    icon: ClipboardList,
-    color: "bg-purple-100 text-purple-600",
-  },
-  {
-    title: "Open Issues",
-    value: "18",
-    icon: Clock,
-    color: "bg-orange-100 text-orange-600",
-  },
-  {
-    title: "Completed Projects",
-    value: "12",
-    icon: CheckCircle,
-    color: "bg-green-100 text-green-600",
-  },
-];
+import {
+  getDashboardOverview,
+  getDashboardIssueStats,
+  getDashboardProjectStats,
+} from "../../services/dashboardService";
 
-const projects = [
-  {
-    name: "DevDesk Platform",
-    description: "Project management system",
-    status: "Active",
-    progress: 75,
-  },
-  {
-    name: "E-commerce API",
-    description: "Online shopping platform",
-    status: "Active",
-    progress: 60,
-  },
-  {
-    name: "Portfolio Website",
-    description: "Personal portfolio project",
-    status: "Completed",
-    progress: 100,
-  },
-];
-
-const issues = [
-  {
-    title: "Fix login validation",
-    project: "DevDesk Platform",
-    priority: "High",
-    status: "In Progress",
-  },
-  {
-    title: "Update dashboard UI",
-    project: "DevDesk Platform",
-    priority: "Medium",
-    status: "Open",
-  },
-  {
-    title: "Resolve API error",
-    project: "E-commerce API",
-    priority: "Low",
-    status: "Closed",
-  },
-];
+import { useAuth } from "../../context/AuthContext";
 
 function Dashboard() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const [overview, setOverview] = useState(null);
+  const [issueStats, setIssueStats] = useState(null);
+  const [projects, setProjects] = useState([]);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const [
+          overviewResponse,
+          issueResponse,
+          projectResponse,
+        ] = await Promise.all([
+          getDashboardOverview(),
+          getDashboardIssueStats(),
+          getDashboardProjectStats(),
+        ]);
+
+        setOverview(overviewResponse.overview);
+        setIssueStats(issueResponse.issueStats);
+        setProjects(projectResponse.projectStats);
+
+      } catch (err) {
+        console.error("Dashboard API error:", err);
+
+        setError(
+          err.response?.data?.message ||
+          "Failed to load dashboard data."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  // Convert PostgreSQL COUNT values into numbers
+  const getCount = (stats, key) => {
+    const item = stats?.find((stat) => stat.status === key);
+
+    return Number(item?.total || 0);
+  };
+
+  const openIssues = getCount(
+    issueStats?.statusStats,
+    "open"
+  );
+
+  const stats = [
+    {
+      title: "Total Projects",
+      value: Number(overview?.total_projects || 0),
+      icon: FolderKanban,
+      color: "bg-blue-100 text-blue-600",
+    },
+    {
+      title: "Total Issues",
+      value: Number(overview?.total_issues || 0),
+      icon: ClipboardList,
+      color: "bg-purple-100 text-purple-600",
+    },
+    {
+      title: "Open Issues",
+      value: openIssues,
+      icon: Clock,
+      color: "bg-orange-100 text-orange-600",
+    },
+    ...(user?.role === "admin"
+      ? [
+          {
+            title: "Total Users",
+            value: Number(overview?.total_users || 0),
+            icon: Users,
+            color: "bg-green-100 text-green-600",
+          },
+        ]
+      : []),
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <p className="text-sm text-gray-500">
+          Loading dashboard...
+        </p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-6">
+        <p className="font-medium text-red-700">
+          {error}
+        </p>
+
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-3 text-sm font-semibold text-blue-600 hover:text-blue-700"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
 
@@ -109,7 +166,10 @@ function Dashboard() {
                   <Icon size={22} />
                 </div>
 
-                <MoreHorizontal className="text-gray-400" size={20} />
+                <MoreHorizontal
+                  className="text-gray-400"
+                  size={20}
+                />
 
               </div>
 
@@ -137,11 +197,14 @@ function Dashboard() {
             </h2>
 
             <p className="mt-1 text-xs text-gray-500">
-              Overview of recently managed projects
+              Projects and their associated issue counts
             </p>
           </div>
 
-          <button className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
+          <button
+            onClick={() => navigate("/projects")}
+            className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700"
+          >
             View all
             <ArrowUpRight size={16} />
           </button>
@@ -154,55 +217,40 @@ function Dashboard() {
             <thead className="bg-gray-50 text-xs uppercase text-gray-500">
               <tr>
                 <th className="px-5 py-4">Project</th>
-                <th className="px-5 py-4">Progress</th>
-                <th className="px-5 py-4">Status</th>
+                <th className="px-5 py-4">Total Issues</th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-gray-100">
 
-              {projects.map((project) => (
-                <tr key={project.name}>
+              {projects.length > 0 ? (
+                projects.map((project) => (
+                  <tr key={project.project_id}>
 
-                  <td className="px-5 py-4">
-                    <p className="font-medium text-gray-800">
-                      {project.name}
-                    </p>
+                    <td className="px-5 py-4">
+                      <p className="font-medium text-gray-800">
+                        {project.project_name}
+                      </p>
+                    </td>
 
-                    <p className="mt-1 text-xs text-gray-500">
-                      {project.description}
-                    </p>
-                  </td>
-
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-3">
-
-                      <div className="h-2 w-28 rounded-full bg-gray-100">
-                        <div
-                          className="h-2 rounded-full bg-blue-600"
-                          style={{ width: `${project.progress}%` }}
-                        />
-                      </div>
-
-                      <span className="text-xs text-gray-600">
-                        {project.progress}%
+                    <td className="px-5 py-4">
+                      <span className="font-medium text-gray-700">
+                        {Number(project.total_issues || 0)}
                       </span>
+                    </td>
 
-                    </div>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan="2"
+                    className="px-5 py-8 text-center text-gray-500"
+                  >
+                    No projects found.
                   </td>
-
-                  <td className="px-5 py-4">
-                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${
-                      project.status === "Completed"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-blue-100 text-blue-700"
-                    }`}>
-                      {project.status}
-                    </span>
-                  </td>
-
                 </tr>
-              ))}
+              )}
 
             </tbody>
           </table>
@@ -210,65 +258,108 @@ function Dashboard() {
 
       </section>
 
-      {/* Recent Issues */}
+      {/* Issue Statistics */}
       <section className="rounded-xl border border-gray-200 bg-white">
 
         <div className="border-b border-gray-200 p-5">
           <h2 className="font-semibold text-gray-900">
-            Recent Issues
+            Issue Statistics
           </h2>
 
           <p className="mt-1 text-xs text-gray-500">
-            Latest issues across your projects
+            Breakdown of issues by status and priority
           </p>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+        <div className="grid grid-cols-1 gap-6 p-5 md:grid-cols-2">
 
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-              <tr>
-                <th className="px-5 py-4">Issue</th>
-                <th className="px-5 py-4">Project</th>
-                <th className="px-5 py-4">Priority</th>
-                <th className="px-5 py-4">Status</th>
-              </tr>
-            </thead>
+          {/* Status Statistics */}
+          <div>
+            <h3 className="mb-4 text-sm font-semibold text-gray-700">
+              Issues by Status
+            </h3>
 
-            <tbody className="divide-y divide-gray-100">
+            <div className="space-y-4">
 
-              {issues.map((issue) => (
-                <tr key={issue.title}>
+              {[
+                { key: "open", label: "Open", color: "bg-blue-500" },
+                { key: "in_progress", label: "In Progress", color: "bg-orange-500" },
+                { key: "resolved", label: "Resolved", color: "bg-green-500" },
+                { key: "closed", label: "Closed", color: "bg-gray-500" },
+              ].map((item) => {
+                const count = getCount(
+                  issueStats?.statusStats,
+                  item.key
+                );
 
-                  <td className="px-5 py-4 font-medium text-gray-800">
-                    {issue.title}
-                  </td>
+                return (
+                  <div key={item.key}>
+                    <div className="mb-2 flex items-center justify-between text-sm">
+                      <span className="text-gray-600">
+                        {item.label}
+                      </span>
 
-                  <td className="px-5 py-4 text-gray-500">
-                    {issue.project}
-                  </td>
+                      <span className="font-semibold text-gray-800">
+                        {count}
+                      </span>
+                    </div>
 
-                  <td className="px-5 py-4">
-                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${
-                      issue.priority === "High"
-                        ? "bg-red-100 text-red-700"
-                        : issue.priority === "Medium"
-                        ? "bg-orange-100 text-orange-700"
-                        : "bg-gray-100 text-gray-700"
-                    }`}>
-                      {issue.priority}
+                    <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                      <div
+                        className={`h-full rounded-full ${item.color}`}
+                        style={{
+                          width: `${
+                            overview?.total_issues
+                              ? (count / Number(overview.total_issues)) * 100
+                              : 0
+                          }%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+
+            </div>
+          </div>
+
+          {/* Priority Statistics */}
+          <div>
+            <h3 className="mb-4 text-sm font-semibold text-gray-700">
+              Issues by Priority
+            </h3>
+
+            <div className="space-y-4">
+
+              {[
+                { key: "critical", label: "Critical", color: "text-red-600" },
+                { key: "high", label: "High", color: "text-orange-600" },
+                { key: "medium", label: "Medium", color: "text-yellow-600" },
+                { key: "low", label: "Low", color: "text-green-600" },
+              ].map((item) => {
+                const priority = issueStats?.priorityStats?.find(
+                  (stat) => stat.priority === item.key
+                );
+
+                return (
+                  <div
+                    key={item.key}
+                    className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3"
+                  >
+                    <span className="text-sm text-gray-600">
+                      {item.label}
                     </span>
-                  </td>
 
-                  <td className="px-5 py-4 text-gray-600">
-                    {issue.status}
-                  </td>
+                    <span className={`text-sm font-bold ${item.color}`}>
+                      {Number(priority?.total || 0)}
+                    </span>
+                  </div>
+                );
+              })}
 
-                </tr>
-              ))}
+            </div>
+          </div>
 
-            </tbody>
-          </table>
         </div>
 
       </section>

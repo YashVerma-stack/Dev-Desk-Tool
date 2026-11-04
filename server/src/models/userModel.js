@@ -35,7 +35,14 @@ export const createUser = async (name, email, hashedPassword) => {
 // Get all users
 export const getAllUsers = async () => {
   const query = `
-    SELECT id, name, email, role, created_at, updated_at
+    SELECT
+      id,
+      name,
+      email,
+      role,
+      is_deleted,
+      created_at,
+      updated_at
     FROM users
     ORDER BY created_at DESC
   `;
