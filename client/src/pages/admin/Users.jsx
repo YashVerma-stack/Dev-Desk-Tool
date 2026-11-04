@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Search,
   Eye,
@@ -9,45 +8,20 @@ import {
   RotateCcw,
   Users as UsersIcon,
 } from "lucide-react";
+import toast from "react-hot-toast";
 
-const initialUsers = [
-  {
-    id: 1,
-    name: "Rahul Sharma",
-    email: "rahul@example.com",
-    role: "member",
-    created_at: "2026-10-10T10:30:00",
-    updated_at: "2026-10-15T12:30:00",
-  },
-  {
-    id: 2,
-    name: "Priya Singh",
-    email: "priya@example.com",
-    role: "admin",
-    created_at: "2026-10-12T09:15:00",
-    updated_at: "2026-10-18T11:20:00",
-  },
-  {
-    id: 3,
-    name: "Amit Verma",
-    email: "amit@example.com",
-    role: "member",
-    created_at: "2026-10-15T14:20:00",
-    updated_at: "2026-10-20T10:00:00",
-  },
-  {
-    id: 4,
-    name: "Neha Gupta",
-    email: "neha@example.com",
-    role: "member",
-    created_at: "2026-10-18T11:45:00",
-    updated_at: "2026-10-22T16:30:00",
-  },
-];
+import {
+  getUsers,
+  getUserById,
+  updateUser,
+  deleteUser,
+  restoreUser,
+} from "../../services/userService";
 
 function Users() {
-  const [users, setUsers] = useState(initialUsers);
+  const [users, setUsers] = useState([]);
   const [deletedUsers, setDeletedUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("active");
@@ -65,17 +39,43 @@ function Users() {
 
   const [error, setError] = useState("");
 
-  // Search users
+  // Fetch users from backend
+  const fetchUsers = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      const response = await getUsers();
+      const allUsers = response.users || [];
+
+      setUsers(allUsers.filter((user) => !user.is_deleted));
+      setDeletedUsers(allUsers.filter((user) => user.is_deleted));
+    } catch (err) {
+      console.error("Fetch users error:", err);
+
+      toast.error(
+        err.response?.data?.message || "Failed to fetch users"
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  // Active or deleted users
   const currentUsers =
     activeTab === "active" ? users : deletedUsers;
 
+  // Search users
   const filteredUsers = currentUsers.filter((user) => {
     const searchValue = search.toLowerCase();
 
     return (
-      user.name.toLowerCase().includes(searchValue) ||
-      user.email.toLowerCase().includes(searchValue) ||
-      user.role.toLowerCase().includes(searchValue)
+      user.name?.toLowerCase().includes(searchValue) ||
+      user.email?.toLowerCase().includes(searchValue) ||
+      user.role?.toLowerCase().includes(searchValue)
     );
   });
 
@@ -90,9 +90,20 @@ function Users() {
     });
   };
 
-  // View user
-  const handleViewUser = (user) => {
-    setSelectedUser(user);
+  // View user details
+  const handleViewUser = async (user) => {
+    try {
+      const response = await getUserById(user.id);
+
+      setSelectedUser(response.user);
+    } catch (err) {
+      console.error("View user error:", err);
+
+      toast.error(
+        err.response?.data?.message ||
+          "Failed to fetch user details"
+      );
+    }
   };
 
   // Open edit modal
@@ -122,7 +133,7 @@ function Users() {
   };
 
   // Update user
-  const handleEditSubmit = (e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
 
     const name = formData.name.trim();
@@ -138,36 +149,42 @@ function Users() {
       return;
     }
 
-    const emailExists = users.some(
-      (user) =>
-        user.email.toLowerCase() === email &&
-        user.id !== editingUser.id
-    );
+    try {
+      setError("");
 
-    if (emailExists) {
-      setError("This email is already registered.");
-      return;
+      const response = await updateUser(editingUser.id, {
+        name,
+        email,
+        role: formData.role,
+      });
+
+      const updatedUser = response.user;
+
+      setUsers((previousUsers) =>
+        previousUsers.map((user) =>
+          user.id === editingUser.id ? updatedUser : user
+        )
+      );
+
+      if (selectedUser?.id === editingUser.id) {
+        setSelectedUser(updatedUser);
+      }
+
+      handleCloseEdit();
+
+      toast.success(
+        response.message || "User updated successfully"
+      );
+    } catch (err) {
+      console.error("Update user error:", err);
+
+      const message =
+        err.response?.data?.message ||
+        "Failed to update user";
+
+      setError(message);
+      toast.error(message);
     }
-
-    const updatedUser = {
-      ...editingUser,
-      name,
-      email,
-      role: formData.role,
-      updated_at: new Date().toISOString(),
-    };
-
-    setUsers((prevUsers) =>
-      prevUsers.map((user) =>
-        user.id === editingUser.id ? updatedUser : user
-      )
-    );
-
-    if (selectedUser?.id === editingUser.id) {
-      setSelectedUser(updatedUser);
-    }
-
-    handleCloseEdit();
   };
 
   // Open delete confirmation
@@ -180,30 +197,32 @@ function Users() {
     setDeletingUser(null);
   };
 
-  // Confirm deletion (static soft-delete simulation)
-  const handleConfirmDelete = () => {
+  // Delete user
+  const handleConfirmDelete = async () => {
     if (!deletingUser) return;
 
-    const deletedUser = {
-      ...deletingUser,
-      is_deleted: true,
-      updated_at: new Date().toISOString(),
-    };
+    try {
+      const response = await deleteUser(deletingUser.id);
 
-    setUsers((prevUsers) =>
-      prevUsers.filter((user) => user.id !== deletingUser.id)
-    );
+      setDeletingUser(null);
 
-    setDeletedUsers((prevUsers) => [
-      deletedUser,
-      ...prevUsers,
-    ]);
+      if (selectedUser?.id === deletingUser.id) {
+        setSelectedUser(null);
+      }
 
-    if (selectedUser?.id === deletingUser.id) {
-      setSelectedUser(null);
+      await fetchUsers();
+
+      toast.success(
+        response.message || "User deleted successfully"
+      );
+    } catch (err) {
+      console.error("Delete user error:", err);
+
+      toast.error(
+        err.response?.data?.message ||
+          "Failed to delete user"
+      );
     }
-
-    setDeletingUser(null);
   };
 
   // Open restore confirmation
@@ -216,26 +235,28 @@ function Users() {
     setRestoringUser(null);
   };
 
-  // Confirm restore
-  const handleConfirmRestore = () => {
+  // Restore user
+  const handleConfirmRestore = async () => {
     if (!restoringUser) return;
 
-    const restoredUser = {
-      ...restoringUser,
-      is_deleted: false,
-      updated_at: new Date().toISOString(),
-    };
+    try {
+      const response = await restoreUser(restoringUser.id);
 
-    setDeletedUsers((prevUsers) =>
-      prevUsers.filter((user) => user.id !== restoringUser.id)
-    );
+      setRestoringUser(null);
 
-    setUsers((prevUsers) => [
-      restoredUser,
-      ...prevUsers,
-    ]);
+      await fetchUsers();
 
-    setRestoringUser(null);
+      toast.success(
+        response.message || "User restored successfully"
+      );
+    } catch (err) {
+      console.error("Restore user error:", err);
+
+      toast.error(
+        err.response?.data?.message ||
+          "Failed to restore user"
+      );
+    }
   };
 
   return (
@@ -255,13 +276,17 @@ function Users() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-gray-200 bg-white p-5">
           <p className="text-sm text-gray-500">Active Users</p>
+
           <h2 className="mt-2 text-2xl font-bold text-gray-900">
             {users.length}
           </h2>
         </div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="text-sm text-gray-500">Administrators</p>
+          <p className="text-sm text-gray-500">
+            Administrators
+          </p>
+
           <h2 className="mt-2 text-2xl font-bold text-blue-600">
             {users.filter((user) => user.role === "admin").length}
           </h2>
@@ -269,6 +294,7 @@ function Users() {
 
         <div className="rounded-xl border border-gray-200 bg-white p-5">
           <p className="text-sm text-gray-500">Deleted Users</p>
+
           <h2 className="mt-2 text-2xl font-bold text-red-600">
             {deletedUsers.length}
           </h2>
@@ -360,106 +386,124 @@ function Users() {
             </thead>
 
             <tbody className="divide-y divide-gray-100">
-              {filteredUsers.map((user) => (
-                <tr key={user.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 font-semibold text-blue-700">
-                        {user.name.charAt(0).toUpperCase()}
-                      </div>
-
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {user.name}
-                        </p>
-
-                        <p className="text-sm text-gray-500">
-                          {user.email}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-
-                  <td className="px-6 py-4">
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${
-                        user.role === "admin"
-                          ? "bg-purple-100 text-purple-700"
-                          : "bg-green-100 text-green-700"
-                      }`}
-                    >
-                      {user.role === "admin" ? "Admin" : "Member"}
-                    </span>
-                  </td>
-
-                  <td className="px-6 py-4 text-sm text-gray-600">
-                    {formatDate(user.created_at)}
-                  </td>
-
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleViewUser(user)}
-                        title="View User"
-                        className="rounded-lg p-2 text-gray-500 hover:bg-blue-50 hover:text-blue-600"
-                      >
-                        <Eye size={17} />
-                      </button>
-
-                      {activeTab === "active" ? (
-                        <>
-                          <button
-                            onClick={() => handleEditUser(user)}
-                            title="Edit User"
-                            className="rounded-lg p-2 text-gray-500 hover:bg-amber-50 hover:text-amber-600"
-                          >
-                            <Pencil size={17} />
-                          </button>
-
-                          <button
-                            onClick={() => handleDeleteUser(user)}
-                            title="Delete User"
-                            className="rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600"
-                          >
-                            <Trash2 size={17} />
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          onClick={() => handleRestoreUser(user)}
-                          title="Restore User"
-                          className="rounded-lg p-2 text-gray-500 hover:bg-green-50 hover:text-green-600"
-                        >
-                          <RotateCcw size={17} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-
-              {filteredUsers.length === 0 && (
+              {loading ? (
                 <tr>
                   <td
                     colSpan="4"
-                    className="px-6 py-10 text-center"
+                    className="px-6 py-10 text-center text-sm text-gray-500"
                   >
-                    <UsersIcon
-                      size={30}
-                      className="mx-auto mb-2 text-gray-300"
-                    />
-
-                    <p className="text-sm font-medium text-gray-600">
-                      No users found.
-                    </p>
-
-                    <p className="mt-1 text-xs text-gray-400">
-                      {activeTab === "deleted"
-                        ? "There are no deleted users."
-                        : "Try another search term."}
-                    </p>
+                    Loading users...
                   </td>
                 </tr>
+              ) : (
+                <>
+                  {filteredUsers.map((user) => (
+                    <tr
+                      key={user.id}
+                      className="hover:bg-gray-50"
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 font-semibold text-blue-700">
+                            {user.name.charAt(0).toUpperCase()}
+                          </div>
+
+                          <div>
+                            <p className="font-medium text-gray-900">
+                              {user.name}
+                            </p>
+
+                            <p className="text-sm text-gray-500">
+                              {user.email}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-medium ${
+                            user.role === "admin"
+                              ? "bg-purple-100 text-purple-700"
+                              : "bg-green-100 text-green-700"
+                          }`}
+                        >
+                          {user.role === "admin"
+                            ? "Admin"
+                            : "Member"}
+                        </span>
+                      </td>
+
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        {formatDate(user.created_at)}
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleViewUser(user)}
+                            title="View User"
+                            className="rounded-lg p-2 text-gray-500 hover:bg-blue-50 hover:text-blue-600"
+                          >
+                            <Eye size={17} />
+                          </button>
+
+                          {activeTab === "active" ? (
+                            <>
+                              <button
+                                onClick={() => handleEditUser(user)}
+                                title="Edit User"
+                                className="rounded-lg p-2 text-gray-500 hover:bg-amber-50 hover:text-amber-600"
+                              >
+                                <Pencil size={17} />
+                              </button>
+
+                              <button
+                                onClick={() => handleDeleteUser(user)}
+                                title="Delete User"
+                                className="rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600"
+                              >
+                                <Trash2 size={17} />
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => handleRestoreUser(user)}
+                              title="Restore User"
+                              className="rounded-lg p-2 text-gray-500 hover:bg-green-50 hover:text-green-600"
+                            >
+                              <RotateCcw size={17} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {filteredUsers.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan="4"
+                        className="px-6 py-10 text-center"
+                      >
+                        <UsersIcon
+                          size={30}
+                          className="mx-auto mb-2 text-gray-300"
+                        />
+
+                        <p className="text-sm font-medium text-gray-600">
+                          No users found.
+                        </p>
+
+                        <p className="mt-1 text-xs text-gray-400">
+                          {activeTab === "deleted"
+                            ? "There are no deleted users."
+                            : "Try another search term."}
+                        </p>
+                      </td>
+                    </tr>
+                  )}
+                </>
               )}
             </tbody>
           </table>
@@ -508,6 +552,7 @@ function Users() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="rounded-lg bg-gray-50 p-4">
                   <p className="text-xs text-gray-500">User ID</p>
+
                   <p className="mt-1 font-medium text-gray-900">
                     #{selectedUser.id}
                   </p>
@@ -515,6 +560,7 @@ function Users() {
 
                 <div className="rounded-lg bg-gray-50 p-4">
                   <p className="text-xs text-gray-500">Role</p>
+
                   <p className="mt-1 font-medium capitalize text-gray-900">
                     {selectedUser.role}
                   </p>
@@ -522,6 +568,7 @@ function Users() {
 
                 <div className="rounded-lg bg-gray-50 p-4">
                   <p className="text-xs text-gray-500">Joined Date</p>
+
                   <p className="mt-1 text-sm font-medium text-gray-900">
                     {formatDate(selectedUser.created_at)}
                   </p>
@@ -529,6 +576,7 @@ function Users() {
 
                 <div className="rounded-lg bg-gray-50 p-4">
                   <p className="text-xs text-gray-500">Last Updated</p>
+
                   <p className="mt-1 text-sm font-medium text-gray-900">
                     {formatDate(selectedUser.updated_at)}
                   </p>
@@ -577,7 +625,10 @@ function Users() {
               </button>
             </div>
 
-            <form onSubmit={handleEditSubmit} className="space-y-5 p-6">
+            <form
+              onSubmit={handleEditSubmit}
+              className="space-y-5 p-6"
+            >
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">
                   Full Name
@@ -591,6 +642,7 @@ function Users() {
                       ...formData,
                       name: e.target.value,
                     });
+
                     setError("");
                   }}
                   minLength={2}
@@ -613,6 +665,7 @@ function Users() {
                       ...formData,
                       email: e.target.value,
                     });
+
                     setError("");
                   }}
                   required
@@ -740,7 +793,10 @@ function Users() {
 
             <div className="p-6">
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-                <RotateCcw size={22} className="text-green-600" />
+                <RotateCcw
+                  size={22}
+                  className="text-green-600"
+                />
               </div>
 
               <h3 className="text-base font-semibold text-gray-900">
