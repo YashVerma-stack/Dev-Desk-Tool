@@ -36,3 +36,24 @@ export const getUserWorkDetails = async (userId) => {
   const response = await api.get(`/users/${userId}/work-details`);
   return response.data;
 };
+
+// Fetch logged-in user's profile
+export const getMyProfile = async () => {
+  const response = await api.get("/users/profile");
+  return response.data;
+};
+
+// Update logged-in user's profile
+export const updateMyProfile = async (profileData) => {
+  const response = await api.patch("/users/profile", profileData);
+  return response.data;
+};
+
+// Change logged-in user's password
+export const changeMyPassword = async (passwordData) => {
+  const response = await api.patch(
+    "/users/change-password",
+    passwordData
+  );
+  return response.data;
+};
