@@ -30,3 +30,9 @@ export const restoreUser = async (userId) => {
   const response = await api.patch(`/users/${userId}/restore`);
   return response.data;
 };
+
+
+export const getUserWorkDetails = async (userId) => {
+  const response = await api.get(`/users/${userId}/work-details`);
+  return response.data;
+};

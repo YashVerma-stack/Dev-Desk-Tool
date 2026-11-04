@@ -12,7 +12,7 @@ import toast from "react-hot-toast";
 
 import {
   getUsers,
-  getUserById,
+  getUserWorkDetails,
   updateUser,
   deleteUser,
   restoreUser,
@@ -22,6 +22,7 @@ function Users() {
   const [users, setUsers] = useState([]);
   const [deletedUsers, setDeletedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewLoading, setViewLoading] = useState(false);
 
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("active");
@@ -90,19 +91,28 @@ function Users() {
     });
   };
 
-  // View user details
+  // View complete user details and work assignments
   const handleViewUser = async (user) => {
     try {
-      const response = await getUserById(user.id);
+      setViewLoading(true);
+      setSelectedUser(null);
 
-      setSelectedUser(response.user);
+      const response = await getUserWorkDetails(user.id);
+
+      setSelectedUser({
+        user: response.user,
+        projects: response.projects || [],
+        assignedIssues: response.assignedIssues || [],
+      });
     } catch (err) {
-      console.error("View user error:", err);
+      console.error("View user work details error:", err);
 
       toast.error(
         err.response?.data?.message ||
-          "Failed to fetch user details"
+          "Failed to fetch user work details"
       );
+    } finally {
+      setViewLoading(false);
     }
   };
 
@@ -166,8 +176,15 @@ function Users() {
         )
       );
 
-      if (selectedUser?.id === editingUser.id) {
-        setSelectedUser(updatedUser);
+      // Update nested selected user state
+      if (selectedUser?.user?.id === editingUser.id) {
+        setSelectedUser((previous) => ({
+          ...previous,
+          user: {
+            ...previous.user,
+            ...updatedUser,
+          },
+        }));
       }
 
       handleCloseEdit();
@@ -206,7 +223,7 @@ function Users() {
 
       setDeletingUser(null);
 
-      if (selectedUser?.id === deletingUser.id) {
+      if (selectedUser?.user?.id === deletingUser.id) {
         setSelectedUser(null);
       }
 
@@ -515,89 +532,274 @@ function Users() {
         </div>
       </div>
 
-      {/* View User Modal */}
-      {selectedUser && (
+      {/* View User Work Details Modal */}
+      {(viewLoading || selectedUser) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-gray-200 p-5">
-              <h2 className="text-lg font-semibold text-gray-900">
-                User Details
-              </h2>
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-xl">
+            {viewLoading ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <div className="h-9 w-9 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" />
 
-              <button
-                onClick={() => setSelectedUser(null)}
-                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="space-y-5 p-6">
-              <div className="flex items-center gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-xl font-bold text-blue-700">
-                  {selectedUser.name.charAt(0).toUpperCase()}
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    {selectedUser.name}
-                  </h3>
-
-                  <p className="text-sm text-gray-500">
-                    {selectedUser.email}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="rounded-lg bg-gray-50 p-4">
-                  <p className="text-xs text-gray-500">User ID</p>
-
-                  <p className="mt-1 font-medium text-gray-900">
-                    #{selectedUser.id}
-                  </p>
-                </div>
-
-                <div className="rounded-lg bg-gray-50 p-4">
-                  <p className="text-xs text-gray-500">Role</p>
-
-                  <p className="mt-1 font-medium capitalize text-gray-900">
-                    {selectedUser.role}
-                  </p>
-                </div>
-
-                <div className="rounded-lg bg-gray-50 p-4">
-                  <p className="text-xs text-gray-500">Joined Date</p>
-
-                  <p className="mt-1 text-sm font-medium text-gray-900">
-                    {formatDate(selectedUser.created_at)}
-                  </p>
-                </div>
-
-                <div className="rounded-lg bg-gray-50 p-4">
-                  <p className="text-xs text-gray-500">Last Updated</p>
-
-                  <p className="mt-1 text-sm font-medium text-gray-900">
-                    {formatDate(selectedUser.updated_at)}
-                  </p>
-                </div>
-              </div>
-
-              {selectedUser.is_deleted && (
-                <p className="rounded-lg bg-red-50 p-3 text-sm text-red-600">
-                  This account is currently deleted.
+                <p className="mt-4 text-sm text-gray-500">
+                  Loading user work details...
                 </p>
-              )}
-            </div>
+              </div>
+            ) : (
+              <>
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-gray-200 p-5">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">
+                      User Work Details
+                    </h2>
 
-            <div className="flex justify-end border-t border-gray-200 p-5">
-              <button
-                onClick={() => setSelectedUser(null)}
-                className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
-              >
-                Close
-              </button>
-            </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Personal information, projects and assigned issues.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedUser(null)}
+                    className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                {selectedUser && (
+                  <div className="space-y-6 p-6">
+                    {/* User Profile */}
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-2xl font-bold text-blue-700">
+                        {selectedUser.user.name?.charAt(0).toUpperCase()}
+                      </div>
+
+                      <div className="flex-1">
+                        <h3 className="text-xl font-semibold text-gray-900">
+                          {selectedUser.user.name}
+                        </h3>
+
+                        <p className="text-sm text-gray-500">
+                          {selectedUser.user.email}
+                        </p>
+
+                        <span
+                          className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-medium ${
+                            selectedUser.user.is_deleted
+                              ? "bg-red-100 text-red-700"
+                              : "bg-green-100 text-green-700"
+                          }`}
+                        >
+                          {selectedUser.user.is_deleted
+                            ? "Deleted"
+                            : "Active"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Personal Information */}
+                    <section>
+                      <h3 className="mb-3 text-base font-semibold text-gray-900">
+                        Personal Information
+                      </h3>
+
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {[
+                          ["User ID", `#${selectedUser.user.id}`],
+                          ["Role", selectedUser.user.role],
+                          ["Email", selectedUser.user.email],
+                          [
+                            "Joining Date",
+                            formatDate(selectedUser.user.created_at),
+                          ],
+                          [
+                            "Last Updated",
+                            formatDate(selectedUser.user.updated_at),
+                          ],
+                        ].map(([label, value]) => (
+                          <div
+                            key={label}
+                            className="rounded-lg bg-gray-50 p-4"
+                          >
+                            <p className="text-xs text-gray-500">
+                              {label}
+                            </p>
+
+                            <p className="mt-1 break-words text-sm font-medium capitalize text-gray-900">
+                              {value}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+
+                    {/* Work Summary */}
+                    <section>
+                      <h3 className="mb-3 text-base font-semibold text-gray-900">
+                        Work Summary
+                      </h3>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="rounded-xl border border-gray-200 p-4">
+                          <p className="text-sm text-gray-500">
+                            Assigned Projects
+                          </p>
+
+                          <p className="mt-2 text-2xl font-bold text-blue-600">
+                            {selectedUser.projects.length}
+                          </p>
+                        </div>
+
+                        <div className="rounded-xl border border-gray-200 p-4">
+                          <p className="text-sm text-gray-500">
+                            Assigned Issues
+                          </p>
+
+                          <p className="mt-2 text-2xl font-bold text-purple-600">
+                            {selectedUser.assignedIssues.length}
+                          </p>
+                        </div>
+                      </div>
+                    </section>
+
+                    {/* Assigned Projects */}
+                    <section>
+                      <div className="mb-3 flex items-center justify-between">
+                        <h3 className="text-base font-semibold text-gray-900">
+                          Assigned Projects
+                        </h3>
+
+                        <span className="text-sm text-gray-500">
+                          {selectedUser.projects.length} projects
+                        </span>
+                      </div>
+
+                      {selectedUser.projects.length === 0 ? (
+                        <div className="rounded-lg bg-gray-50 p-6 text-center text-sm text-gray-500">
+                          This user is not assigned to any project.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {selectedUser.projects.map((project) => (
+                            <div
+                              key={project.id}
+                              className="rounded-xl border border-gray-200 p-4"
+                            >
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <h4 className="font-semibold text-gray-900">
+                                  {project.name}
+                                </h4>
+
+                                <span className="w-fit rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                                  Project #{project.id}
+                                </span>
+                              </div>
+
+                              <p className="mt-2 text-sm text-gray-500">
+                                {project.description ||
+                                  "No description available"}
+                              </p>
+
+                              <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-500 sm:grid-cols-2">
+                                <p>
+                                  Project Owner:{" "}
+                                  {project.owner_name || "Unknown"}
+                                </p>
+
+                                <p>
+                                  Assigned Date:{" "}
+                                  {formatDate(project.assigned_at)}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+
+                    {/* Assigned Issues */}
+                    <section>
+                      <div className="mb-3 flex items-center justify-between">
+                        <h3 className="text-base font-semibold text-gray-900">
+                          Assigned Issues
+                        </h3>
+
+                        <span className="text-sm text-gray-500">
+                          {selectedUser.assignedIssues.length} issues
+                        </span>
+                      </div>
+
+                      {selectedUser.assignedIssues.length === 0 ? (
+                        <div className="rounded-lg bg-gray-50 p-6 text-center text-sm text-gray-500">
+                          No issues are currently assigned to this user.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {selectedUser.assignedIssues.map((issue) => (
+                            <div
+                              key={issue.id}
+                              className="rounded-xl border border-gray-200 p-4"
+                            >
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <h4 className="font-semibold text-gray-900">
+                                    {issue.title}
+                                  </h4>
+
+                                  <p className="mt-1 text-sm text-gray-500">
+                                    {issue.project_name}
+                                  </p>
+                                </div>
+
+                                <span
+                                  className={`w-fit rounded-full px-3 py-1 text-xs font-medium ${
+                                    issue.status === "resolved" ||
+                                    issue.status === "closed"
+                                      ? "bg-green-100 text-green-700"
+                                      : issue.status === "in_progress"
+                                      ? "bg-blue-100 text-blue-700"
+                                      : "bg-amber-100 text-amber-700"
+                                  }`}
+                                >
+                                  {issue.status?.replace("_", " ")}
+                                </span>
+                              </div>
+
+                              <p className="mt-3 text-sm text-gray-600">
+                                {issue.description ||
+                                  "No description available"}
+                              </p>
+
+                              <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                                <span>Issue ID: #{issue.id}</span>
+
+                                <span className="rounded-full bg-gray-100 px-3 py-1 font-medium capitalize text-gray-700">
+                                  Priority: {issue.priority}
+                                </span>
+
+                                <span>
+                                  Created by: {issue.creator_name || "Unknown"}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  </div>
+                )}
+
+                {/* Footer */}
+                <div className="flex justify-end border-t border-gray-200 p-5">
+                  <button
+                    onClick={() => setSelectedUser(null)}
+                    className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+                  >
+                    Close
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

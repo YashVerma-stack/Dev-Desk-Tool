@@ -82,7 +82,7 @@ function Sidebar() {
   };
 
   return (
-    <aside className="flex h-screen w-64 flex-col bg-[#111827] text-white">
+    <aside className="flex h-screen w-64 shrink-0 flex-col bg-[#111827] text-white">
 
       {/* Logo */}
       <div className="flex h-20 items-center gap-3 border-b border-gray-700 px-6">

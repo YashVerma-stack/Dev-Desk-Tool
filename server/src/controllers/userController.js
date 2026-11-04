@@ -8,6 +8,7 @@ import {
   getUserPassword,
   updateUserPassword,
   restoreUser,
+  getUserWorkDetails,
 } from "../models/userModel.js";
 import bcrypt from "bcrypt";
 
@@ -367,6 +368,41 @@ export const restoreUserController = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to restore user account",
+    });
+  }
+};
+
+// GET USER WORK DETAILS (ADMIN ONLY)
+export const getUserWorkDetailsController = async (req, res) => {
+  try {
+    const userId = Number(req.params.id);
+
+    if (!Number.isSafeInteger(userId) || userId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID",
+      });
+    }
+
+    const workDetails = await getUserWorkDetails(userId);
+
+    if (!workDetails) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      ...workDetails,
+    });
+  } catch (error) {
+    console.error("Get user work details error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch user work details",
     });
   }
 };

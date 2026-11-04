@@ -332,3 +332,82 @@ export const isActiveMember = async (userId) => {
 
   return result.rowCount > 0;
 };
+
+
+// GET USER WORK DETAILS (ADMIN VIEW)
+export const getUserWorkDetails = async (userId) => {
+  // 1. Get user information
+  const userQuery = `
+    SELECT
+      id,
+      name,
+      email,
+      role,
+      is_deleted,
+      created_at,
+      updated_at
+    FROM users
+    WHERE id = $1
+  `;
+
+  // 2. Get projects assigned to the user
+  const projectsQuery = `
+    SELECT
+      p.id,
+      p.name,
+      p.description,
+      p.owner_id,
+      owner.name AS owner_name,
+      pm.assigned_at,
+      p.created_at,
+      p.updated_at
+    FROM project_members pm
+    INNER JOIN projects p
+      ON p.id = pm.project_id
+    INNER JOIN users owner
+      ON owner.id = p.owner_id
+    WHERE pm.user_id = $1
+    ORDER BY pm.assigned_at DESC
+  `;
+
+  // 3. Get issues assigned to the user
+  const issuesQuery = `
+    SELECT
+      i.id,
+      i.title,
+      i.description,
+      i.status,
+      i.priority,
+      i.project_id,
+      p.name AS project_name,
+      i.created_by,
+      creator.name AS creator_name,
+      i.created_at,
+      i.updated_at
+    FROM issues i
+    INNER JOIN projects p
+      ON p.id = i.project_id
+    LEFT JOIN users creator
+      ON creator.id = i.created_by
+    WHERE i.assigned_to = $1
+    ORDER BY i.created_at DESC
+  `;
+
+  // Execute all queries
+  const [userResult, projectsResult, issuesResult] =
+    await Promise.all([
+      pool.query(userQuery, [userId]),
+      pool.query(projectsQuery, [userId]),
+      pool.query(issuesQuery, [userId]),
+    ]);
+
+  if (userResult.rowCount === 0) {
+    return null;
+  }
+
+  return {
+    user: userResult.rows[0],
+    projects: projectsResult.rows,
+    assignedIssues: issuesResult.rows,
+  };
+};

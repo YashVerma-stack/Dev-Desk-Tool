@@ -1,4 +1,6 @@
+
 import express from "express";
+
 import {
   getUsers,
   getUser,
@@ -8,9 +10,16 @@ import {
   editMyProfile,
   changeMyPassword,
   restoreUserController,
+  getUserWorkDetailsController,
 } from "../controllers/userController.js";
+
 import authorizeRoles from "../middleware/authorizeRoles.js";
-import { updateUserSchema, updateProfileSchema, changePasswordSchema } from "../validators/userValidator.js";
+
+import {
+  updateUserSchema,
+  updateProfileSchema,
+  changePasswordSchema,
+} from "../validators/userValidator.js";
 
 const router = express.Router();
 
@@ -64,6 +73,9 @@ router.use(authorizeRoles("admin"));
 
 // GET all users
 router.get("/", getUsers);
+
+// GET user work details (projects and assigned issues)
+router.get("/:id/work-details", getUserWorkDetailsController);
 
 // GET user by ID
 router.get("/:id", getUser);
