@@ -7,6 +7,26 @@ import {
   deleteIssue,
 } from "../models/issueModel.js";
 
+import { createNotification } from "../models/notificationModel.js";
+import { getActiveAdminIds } from "../models/userModel.js";
+
+const sendNotifications = async (notifications) => {
+  const results = await Promise.allSettled(
+    notifications.map((notification) =>
+      createNotification(notification)
+    )
+  );
+
+  results.forEach((result) => {
+    if (result.status === "rejected") {
+      console.error(
+        "Issue notification failed:",
+        result.reason.message
+      );
+    }
+  });
+};
+
 // ==========================================
 // 1. CREATE ISSUE
 // ==========================================
@@ -57,10 +77,38 @@ export const createIssueController = async (req, res) => {
       throw new Error("Unexpected issue creation result");
     }
 
+    const issue = result.issue;
+    let notifications = [];
+
+    // CASE 1: Admin creates and assigns an issue to a member
+    if (req.user.role === "admin" && issue.assigned_to !== null) {
+      notifications.push({
+        userId: issue.assigned_to,
+        title: "New Issue Assigned",
+        message: `You have been assigned a new issue: "${issue.title}".`,
+        type: "issue_assigned",
+      });
+    }
+
+    // CASE 2: Member creates an issue
+    if (req.user.role === "member") {
+      const adminIds = await getActiveAdminIds();
+
+      notifications = adminIds.map((adminId) => ({
+        userId: adminId,
+        title: "New Issue Created",
+        message: `A member has created a new issue: "${issue.title}".`,
+        type: "issue_created",
+      }));
+    }
+
+    // Create notifications without affecting issue creation
+    await sendNotifications(notifications);
+
     return res.status(201).json({
       success: true,
       message: "Issue created successfully",
-      issue: result.issue,
+      issue,
     });
   } catch (error) {
     console.error("Create issue error:", error.message);
@@ -208,10 +256,65 @@ export const updateIssueController = async (req, res) => {
       throw new Error("Unexpected issue update result");
     }
 
+    const previousIssue = result.previousIssue;
+    const updatedIssue = result.issue;
+
+    let notifications = [];
+
+    // CASE 1: Admin changes issue assignment
+    if (
+      req.user.role === "admin" &&
+      updatedIssue.assigned_to !== null &&
+      updatedIssue.assigned_to !== previousIssue.assigned_to
+    ) {
+      notifications.push({
+        userId: updatedIssue.assigned_to,
+        title: "Issue Assigned to You",
+        message: `An issue has been assigned to you: "${updatedIssue.title}".`,
+        type: "issue_assigned",
+      });
+    }
+
+    // CASE 2: Member changes issue status
+    if (
+      req.user.role === "member" &&
+      updatedIssue.status !== previousIssue.status
+    ) {
+      const adminIds = await getActiveAdminIds();
+
+      notifications.push(
+        ...adminIds.map((adminId) => ({
+          userId: adminId,
+          title: "Issue Status Updated",
+          message: `A member changed the status of "${updatedIssue.title}" from "${previousIssue.status}" to "${updatedIssue.status}".`,
+          type: "issue_status_updated",
+        }))
+      );
+    }
+
+    // CASE 3: Member changes issue priority
+    if (
+      req.user.role === "member" &&
+      updatedIssue.priority !== previousIssue.priority
+    ) {
+      const adminIds = await getActiveAdminIds();
+
+      notifications.push(
+        ...adminIds.map((adminId) => ({
+          userId: adminId,
+          title: "Issue Priority Updated",
+          message: `A member changed the priority of "${updatedIssue.title}" from "${previousIssue.priority}" to "${updatedIssue.priority}".`,
+          type: "issue_priority_updated",
+        }))
+      );
+    }
+
+    await sendNotifications(notifications);
+
     return res.status(200).json({
       success: true,
       message: "Issue updated successfully",
-      issue: result.issue,
+      issue: updatedIssue,
     });
   } catch (error) {
     console.error("Update issue error:", error.message);

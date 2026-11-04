@@ -358,6 +358,7 @@ export const updateIssue = async (issueId, user, updates) => {
 
     return {
       status: "updated",
+      previousIssue: issue,
       issue: updatedResult.rows[0],
     };
   } catch (error) {
