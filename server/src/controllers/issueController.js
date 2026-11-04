@@ -48,7 +48,8 @@ export const createIssueController = async (req, res) => {
     if (result.status === "invalid_assignee") {
       return res.status(400).json({
         success: false,
-        message: "Assigned user must be an active member of this project",
+        message:
+          "Assigned user must be an active member of this project",
       });
     }
 
@@ -147,6 +148,17 @@ export const updateIssueController = async (req, res) => {
       });
     }
 
+    // Only admins can change issue assignments
+    if (
+      req.user.role !== "admin" &&
+      Object.prototype.hasOwnProperty.call(req.body, "assignedTo")
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "Only admins can change issue assignments.",
+      });
+    }
+
     const {
       title,
       description,
@@ -180,7 +192,8 @@ export const updateIssueController = async (req, res) => {
     if (result.status === "invalid_assignee") {
       return res.status(400).json({
         success: false,
-        message: "Assigned user must be an active member of this project",
+        message:
+          "Assigned user must be an active member of this project",
       });
     }
 
@@ -216,6 +229,14 @@ export const updateIssueController = async (req, res) => {
 
 export const deleteIssueController = async (req, res) => {
   try {
+    // Only admins can delete issues
+    if (req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only admins can delete issues.",
+      });
+    }
+
     const issueId = Number(req.params.id);
 
     if (!Number.isSafeInteger(issueId) || issueId <= 0) {
