@@ -1,0 +1,27 @@
+{
+  "name": "dev-desk",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n SERVER,CLIENT -c blue,green \"npm --prefix server run dev\" \"npm --prefix client run dev\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YashVerma-stack/Dev-Desk-Tool.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/YashVerma-stack/Dev-Desk-Tool/issues"
+  },
+  "homepage": "https://github.com/YashVerma-stack/Dev-Desk-Tool#readme",
+  "devDependencies": {
+    "concurrently": "^10.0.6"
+  }
+}

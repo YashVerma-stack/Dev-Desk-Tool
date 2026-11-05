@@ -8,6 +8,17 @@ import {
   Trash2,
   AlertCircle,
   X,
+  ClipboardList,
+  Clock3,
+  CheckCircle2,
+  CircleDot,
+  Flag,
+  FolderKanban,
+  User,
+  CalendarDays,
+  LoaderCircle,
+  Filter,
+  ArrowUpRight,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -48,6 +59,8 @@ function Issues() {
   const [submitting, setSubmitting] = useState(false);
 
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState(null);
@@ -93,12 +106,51 @@ function Issues() {
     fetchPageData();
   }, [fetchPageData]);
 
-  // Search issues
+  // Issue statistics
+  const totalIssues = issues.length;
+
+  const openIssues = issues.filter(
+    (issue) => issue.status === "open"
+  ).length;
+
+  const inProgressIssues = issues.filter(
+    (issue) => issue.status === "in_progress"
+  ).length;
+
+  const resolvedIssues = issues.filter(
+    (issue) => issue.status === "resolved"
+  ).length;
+
+  const closedIssues = issues.filter(
+    (issue) => issue.status === "closed"
+  ).length;
+
+  // Search and filters
   const filteredIssues = useMemo(() => {
-    return issues.filter((issue) =>
-      issue.title?.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [issues, search]);
+    const normalizedSearch = search.trim().toLowerCase();
+
+    return issues.filter((issue) => {
+      const matchesSearch =
+        issue.title?.toLowerCase().includes(normalizedSearch) ||
+        issue.project_name?.toLowerCase().includes(normalizedSearch) ||
+        issue.assignee_name?.toLowerCase().includes(normalizedSearch) ||
+        String(issue.id).includes(normalizedSearch);
+
+      const matchesStatus =
+        statusFilter === "all" ||
+        issue.status === statusFilter;
+
+      const matchesPriority =
+        priorityFilter === "all" ||
+        issue.priority === priorityFilter;
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesPriority
+      );
+    });
+  }, [issues, search, statusFilter, priorityFilter]);
 
   // Fetch members belonging to a project
   const fetchMembers = async (projectId) => {
@@ -162,7 +214,6 @@ function Issues() {
     setError("");
     setIsModalOpen(true);
 
-    // Only admins need the member list for assignment changes
     if (isAdmin) {
       await fetchMembers(issue.project_id);
     }
@@ -193,7 +244,6 @@ function Issues() {
     setMembers([]);
     setError("");
 
-    // Members do not need the assignee list
     if (isAdmin && projectId) {
       await fetchMembers(projectId);
     }
@@ -232,7 +282,6 @@ function Issues() {
       return;
     }
 
-    // Validate selected assignee for admins
     if (isAdmin && formData.assignedTo) {
       const selectedMember = members.find(
         (member) =>
@@ -251,7 +300,6 @@ function Issues() {
       priority: formData.priority,
     };
 
-    // Only admins can change issue assignments
     if (isAdmin) {
       payload.assignedTo = formData.assignedTo
         ? Number(formData.assignedTo)
@@ -270,16 +318,13 @@ function Issues() {
 
       if (editingIssue) {
         await updateIssue(editingIssue.id, payload);
-
         toast.success("Issue updated successfully.");
       } else {
         await createIssue(payload);
-
         toast.success("Issue created successfully.");
       }
 
       await fetchPageData();
-
       handleCloseModal();
     } catch (err) {
       console.error("Issue submission failed:", err);
@@ -331,10 +376,22 @@ function Issues() {
   // Priority styles
   const getPriorityStyle = (priority) => {
     const styles = {
-      critical: "bg-red-100 text-red-700",
-      high: "bg-orange-100 text-orange-700",
-      medium: "bg-yellow-100 text-yellow-700",
-      low: "bg-gray-100 text-gray-700",
+      critical: "bg-red-50 text-red-700 border-red-100",
+      high: "bg-orange-50 text-orange-700 border-orange-100",
+      medium: "bg-amber-50 text-amber-700 border-amber-100",
+      low: "bg-emerald-50 text-emerald-700 border-emerald-100",
+    };
+
+    return styles[priority] || styles.low;
+  };
+
+  // Priority dot styles
+  const getPriorityDot = (priority) => {
+    const styles = {
+      critical: "bg-red-500",
+      high: "bg-orange-500",
+      medium: "bg-amber-500",
+      low: "bg-emerald-500",
     };
 
     return styles[priority] || styles.low;
@@ -343,10 +400,10 @@ function Issues() {
   // Status styles
   const getStatusStyle = (status) => {
     const styles = {
-      open: "bg-blue-100 text-blue-700",
-      in_progress: "bg-orange-100 text-orange-700",
-      resolved: "bg-green-100 text-green-700",
-      closed: "bg-gray-100 text-gray-700",
+      open: "bg-blue-50 text-blue-700 border-blue-100",
+      in_progress: "bg-orange-50 text-orange-700 border-orange-100",
+      resolved: "bg-emerald-50 text-emerald-700 border-emerald-100",
+      closed: "bg-slate-100 text-slate-600 border-slate-200",
     };
 
     return styles[status] || styles.open;
@@ -359,232 +416,392 @@ function Issues() {
   const formatDate = (date) => {
     if (!date) return "Not available";
 
-    return new Date(date).toLocaleString("en-IN");
+    const parsedDate = new Date(date);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return "Not available";
+    }
+
+    return parsedDate.toLocaleString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
   };
 
+  // Statistics cards
+  const statistics = [
+    {
+      label: "Total Issues",
+      value: totalIssues,
+      description: "All reported issues",
+      icon: ClipboardList,
+      iconStyle: "bg-violet-100 text-violet-700",
+    },
+    {
+      label: "Open Issues",
+      value: openIssues,
+      description: "Waiting for attention",
+      icon: CircleDot,
+      iconStyle: "bg-blue-100 text-blue-700",
+    },
+    {
+      label: "In Progress",
+      value: inProgressIssues,
+      description: "Currently being worked on",
+      icon: Clock3,
+      iconStyle: "bg-orange-100 text-orange-700",
+    },
+    {
+      label: "Resolved",
+      value: resolvedIssues,
+      description: "Successfully resolved",
+      icon: CheckCircle2,
+      iconStyle: "bg-emerald-100 text-emerald-700",
+    },
+  ];
+
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Issues
-          </h1>
+    <div className="mx-auto w-full max-w-[1500px] space-y-5 pb-8">
 
-          <p className="mt-1 text-sm text-gray-500">
-            Create, track, and manage project issues.
-          </p>
+      {/* PAGE HEADER */}
+      <section className="rounded-[28px] border border-white bg-white p-5 shadow-[0_12px_40px_rgba(35,31,75,0.045)] sm:p-7">
+
+        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-orange-700">
+              <ClipboardList size={13} />
+              Issue management
+            </div>
+
+            <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
+              Issues
+            </h1>
+
+            <p className="mt-1.5 text-sm text-slate-500">
+              Track, prioritize, and manage issues across your projects.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleCreateClick}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-600 px-5 py-3 text-sm font-semibold text-white shadow-sm shadow-orange-200 transition hover:bg-orange-700"
+          >
+            <Plus size={18} />
+            Create Issue
+          </button>
         </div>
 
-        <button
-          onClick={handleCreateClick}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          <Plus size={18} />
-          Create Issue
-        </button>
-      </div>
+        {/* WORKSPACE BANNER */}
+        <div className="mt-5 flex items-center gap-3 rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-50/90 to-white px-4 py-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-700">
+            <Flag size={17} />
+          </span>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="text-sm text-gray-500">Total Issues</p>
-          <h2 className="mt-2 text-2xl font-bold text-gray-900">
-            {issues.length}
-          </h2>
+          <div>
+            <p className="text-xs font-semibold text-slate-800">
+              Keep your work moving
+            </p>
+
+            <p className="mt-0.5 text-xs text-slate-500">
+              Monitor issue priorities and stay updated on project progress.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* STATISTICS CARDS */}
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+
+        {statistics.map((stat) => {
+          const Icon = stat.icon;
+
+          return (
+            <article
+              key={stat.label}
+              className="rounded-[24px] border border-white bg-white p-5 shadow-[0_8px_28px_rgba(35,31,75,0.035)] transition hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <div className="flex items-center justify-between">
+                <span
+                  className={`flex h-11 w-11 items-center justify-center rounded-2xl ${stat.iconStyle}`}
+                >
+                  <Icon size={20} />
+                </span>
+
+                <span className="text-[10px] font-medium text-slate-400">
+                  Workspace
+                </span>
+              </div>
+
+              <p className="mt-4 text-3xl font-bold tracking-tight text-slate-950">
+                {stat.value}
+              </p>
+
+              <h2 className="mt-1 text-sm font-semibold text-slate-800">
+                {stat.label}
+              </h2>
+
+              <p className="mt-1 text-[11px] text-slate-400">
+                {stat.description}
+              </p>
+            </article>
+          );
+        })}
+      </section>
+
+      {/* ISSUE FILTERS */}
+      <section className="rounded-[22px] border border-white bg-white p-3 shadow-[0_8px_28px_rgba(35,31,75,0.035)]">
+
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+
+          <div className="flex min-w-0 items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-3 lg:max-w-sm lg:flex-1">
+            <Search size={17} className="shrink-0 text-slate-400" />
+
+            <input
+              type="text"
+              placeholder="Search issues, projects, assignees..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+            />
+
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="text-slate-400 hover:text-slate-700"
+                aria-label="Clear search"
+              >
+                <X size={15} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+
+            <div className="flex items-center gap-2">
+              <Filter size={15} className="text-slate-400" />
+
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 outline-none focus:border-orange-400 sm:flex-none"
+              >
+                <option value="all">All Statuses</option>
+                <option value="open">Open</option>
+                <option value="in_progress">In Progress</option>
+                <option value="resolved">Resolved</option>
+                <option value="closed">Closed</option>
+              </select>
+            </div>
+
+            <select
+              value={priorityFilter}
+              onChange={(e) => setPriorityFilter(e.target.value)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 outline-none focus:border-orange-400"
+            >
+              <option value="all">All Priorities</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      {/* ISSUE LIST */}
+      <section className="overflow-visible rounded-[26px] border border-white bg-white shadow-[0_8px_28px_rgba(35,31,75,0.035)]">
+
+        <div className="flex flex-col justify-between gap-3 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:px-6">
+
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-slate-900">
+                All Issues
+              </h2>
+
+              <span className="rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-bold text-orange-700">
+                {filteredIssues.length} Issues
+              </span>
+            </div>
+
+            <p className="mt-1 text-xs text-slate-500">
+              View and manage issues reported across your projects.
+            </p>
+          </div>
+
+          <span className="text-xs text-slate-400">
+            Showing {filteredIssues.length} of {issues.length}
+          </span>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="text-sm text-gray-500">Open</p>
-          <h2 className="mt-2 text-2xl font-bold text-blue-600">
-            {issues.filter((issue) => issue.status === "open").length}
-          </h2>
-        </div>
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 p-14 text-sm text-slate-500">
+            <LoaderCircle size={18} className="animate-spin" />
+            Loading issues...
+          </div>
+        ) : filteredIssues.length > 0 ? (
+          <div className="space-y-2.5 p-4 sm:p-5">
 
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="text-sm text-gray-500">In Progress</p>
-          <h2 className="mt-2 text-2xl font-bold text-orange-500">
-            {issues.filter(
-              (issue) => issue.status === "in_progress"
-            ).length}
-          </h2>
-        </div>
+            {filteredIssues.map((issue) => (
+              <article
+                key={issue.id}
+                className="group flex flex-col justify-between gap-4 rounded-2xl border border-slate-100 bg-white p-4 transition hover:border-orange-100 hover:bg-[#fcfbff] hover:shadow-sm lg:flex-row lg:items-center"
+              >
+                {/* ISSUE INFORMATION */}
+                <div className="flex min-w-0 items-start gap-3">
 
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="text-sm text-gray-500">Resolved</p>
-          <h2 className="mt-2 text-2xl font-bold text-green-600">
-            {issues.filter(
-              (issue) => issue.status === "resolved"
-            ).length}
-          </h2>
-        </div>
-      </div>
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-orange-700">
+                    <ClipboardList size={19} />
+                  </span>
 
-      {/* Search */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4">
-        <div className="relative max-w-md">
-          <Search
-            size={18}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-          />
+                  <div className="min-w-0 flex-1">
 
-          <input
-            type="text"
-            placeholder="Search issues by title..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-4 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-          />
-        </div>
-      </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="break-words text-sm font-semibold text-slate-900">
+                        {issue.title}
+                      </h3>
 
-      {/* Issues Table */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-        <div className="border-b border-gray-200 px-5 py-4">
-          <h2 className="font-semibold text-gray-900">
-            All Issues
-          </h2>
+                      <span className="text-[10px] font-medium text-slate-400">
+                        #{issue.id}
+                      </span>
+                    </div>
 
-          <p className="mt-1 text-sm text-gray-500">
-            {filteredIssues.length} issues found
-          </p>
-        </div>
+                    <p className="mt-1 line-clamp-1 text-xs text-slate-500">
+                      {issue.description ||
+                        "No description provided."}
+                    </p>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[850px] text-left">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-              <tr>
-                <th className="px-5 py-4 font-medium">Issue</th>
-                <th className="px-5 py-4 font-medium">Project</th>
-                <th className="px-5 py-4 font-medium">Priority</th>
-                <th className="px-5 py-4 font-medium">Status</th>
-                <th className="px-5 py-4 font-medium">Assigned To</th>
-                <th className="px-5 py-4 text-right font-medium">
-                  Actions
-                </th>
-              </tr>
-            </thead>
+                    <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
 
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
-                <tr>
-                  <td
-                    colSpan="6"
-                    className="px-5 py-12 text-center text-sm text-gray-500"
-                  >
-                    Loading issues...
-                  </td>
-                </tr>
-              ) : (
-                <>
-                  {filteredIssues.map((issue) => (
-                    <tr
-                      key={issue.id}
-                      className="hover:bg-gray-50"
-                    >
-                      <td className="px-5 py-4">
-                        <p className="font-medium text-gray-900">
-                          {issue.title}
-                        </p>
-
-                        <p className="mt-1 text-xs text-gray-500">
-                          #{issue.id} · By{" "}
-                          {issue.creator_name || "Unknown"}
-                        </p>
-                      </td>
-
-                      <td className="px-5 py-4 text-sm text-gray-600">
+                      <span className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                        <FolderKanban size={12} className="text-slate-400" />
                         {issue.project_name || "Unknown project"}
-                      </td>
+                      </span>
 
-                      <td className="px-5 py-4">
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${getPriorityStyle(issue.priority)}`}
-                        >
-                          {issue.priority}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${getStatusStyle(issue.status)}`}
-                        >
-                          {formatStatus(issue.status)}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4 text-sm text-gray-600">
+                      <span className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                        <User size={12} className="text-slate-400" />
                         {issue.assignee_name || "Unassigned"}
-                      </td>
+                      </span>
 
-                      <td className="px-5 py-4">
-                        <div className="flex justify-end gap-2">
-                          {/* View */}
-                          <button
-                            onClick={() => setSelectedIssue(issue)}
-                            title="View issue"
-                            className="rounded-lg p-2 text-gray-500 hover:bg-blue-50 hover:text-blue-600"
-                          >
-                            <Eye size={17} />
-                          </button>
+                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                        <CalendarDays size={12} />
+                        {formatDate(issue.created_at)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
-                          {/* Edit */}
-                          <button
-                            onClick={() => handleEditClick(issue)}
-                            title="Edit issue"
-                            className="rounded-lg p-2 text-gray-500 hover:bg-orange-50 hover:text-orange-600"
-                          >
-                            <Pencil size={17} />
-                          </button>
+                {/* BADGES AND ACTIONS */}
+                <div className="flex flex-wrap items-center justify-between gap-3 lg:justify-end">
 
-                          {/* Delete — Admin only */}
-                          {isAdmin && (
-                            <button
-                              onClick={() => handleDelete(issue.id)}
-                              title="Delete issue"
-                              className="rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600"
-                            >
-                              <Trash2 size={17} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  <div className="flex flex-wrap items-center gap-2">
 
-                  {filteredIssues.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan="6"
-                        className="px-5 py-12 text-center text-sm text-gray-500"
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold capitalize ${getPriorityStyle(issue.priority)}`}
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${getPriorityDot(issue.priority)}`}
+                      />
+                      {issue.priority}
+                    </span>
+
+                    <span
+                      className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold capitalize ${getStatusStyle(issue.status)}`}
+                    >
+                      {formatStatus(issue.status)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedIssue(issue)}
+                      title="View issue"
+                      className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-blue-50 hover:text-blue-700"
+                    >
+                      <Eye size={16} />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleEditClick(issue)}
+                      title="Edit issue"
+                      className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-orange-50 hover:text-orange-700"
+                    >
+                      <Pencil size={16} />
+                    </button>
+
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(issue.id)}
+                        title="Delete issue"
+                        className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-red-50 hover:text-red-600"
                       >
-                        <AlertCircle
-                          className="mx-auto mb-2 text-gray-400"
-                          size={24}
-                        />
-                        No issues found.
-                      </td>
-                    </tr>
-                  )}
-                </>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+              <ClipboardList size={26} />
+            </span>
 
-      {/* Create / Edit Issue Modal */}
+            <h3 className="mt-4 text-sm font-semibold text-slate-700">
+              {search || statusFilter !== "all" || priorityFilter !== "all"
+                ? "No matching issues"
+                : "No issues found"}
+            </h3>
+
+            <p className="mt-1 max-w-sm text-xs text-slate-400">
+              {search || statusFilter !== "all" || priorityFilter !== "all"
+                ? "Try changing your search or filters."
+                : "Create an issue to start tracking work in your projects."}
+            </p>
+
+            {!search &&
+              statusFilter === "all" &&
+              priorityFilter === "all" && (
+                <button
+                  type="button"
+                  onClick={handleCreateClick}
+                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-orange-700"
+                >
+                  <Plus size={15} />
+                  Create Issue
+                </button>
+              )}
+          </div>
+        )}
+      </section>
+
+      {/* CREATE / EDIT ISSUE MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white shadow-xl">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[25px] bg-white shadow-2xl">
+
+            <div className="flex items-center justify-between border-b border-slate-100 p-5 sm:p-6">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-orange-600">
+                  Issue management
+                </span>
+
+                <h2 className="mt-1 text-xl font-bold text-slate-900">
                   {editingIssue ? "Edit Issue" : "Create New Issue"}
                 </h2>
 
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-xs text-slate-500">
                   {editingIssue
                     ? "Update the issue information."
                     : "Enter the details to create a new issue."}
@@ -594,23 +811,24 @@ function Issues() {
               <button
                 type="button"
                 onClick={handleCloseModal}
-                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
+                className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
               >
                 <X size={20} />
               </button>
             </div>
 
-            {/* Modal Form */}
-            <form onSubmit={handleSubmit} className="space-y-5 p-6">
+            <form onSubmit={handleSubmit} className="space-y-5 p-5 sm:p-6">
+
               {error && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <div className="flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  <AlertCircle size={17} className="mt-0.5 shrink-0" />
                   {error}
                 </div>
               )}
 
-              {/* Title */}
+              {/* TITLE */}
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
                   Issue Title *
                 </label>
 
@@ -623,13 +841,13 @@ function Issues() {
                   value={formData.title}
                   onChange={handleChange}
                   placeholder="Enter issue title"
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:bg-white focus:ring-2 focus:ring-orange-100"
                 />
               </div>
 
-              {/* Description */}
+              {/* DESCRIPTION */}
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
                   Description
                 </label>
 
@@ -640,18 +858,19 @@ function Issues() {
                   value={formData.description}
                   onChange={handleChange}
                   placeholder="Describe the issue..."
-                  className="w-full resize-none rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:bg-white focus:ring-2 focus:ring-orange-100"
                 />
 
-                <p className="mt-1 text-right text-xs text-gray-400">
+                <p className="mt-1 text-right text-[11px] text-slate-400">
                   {formData.description.length}/5000
                 </p>
               </div>
 
-              {/* Project and Priority */}
+              {/* PROJECT AND PRIORITY */}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
                     Project {!editingIssue && "*"}
                   </label>
 
@@ -661,7 +880,7 @@ function Issues() {
                     disabled={Boolean(editingIssue)}
                     value={formData.projectId}
                     onChange={handleProjectChange}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-blue-500 disabled:bg-gray-100"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-orange-400 disabled:bg-slate-100"
                   >
                     <option value="">Select project</option>
 
@@ -673,14 +892,14 @@ function Issues() {
                   </select>
 
                   {editingIssue && (
-                    <p className="mt-1 text-xs text-gray-400">
+                    <p className="mt-1 text-[11px] text-slate-400">
                       Project cannot be changed through your update API.
                     </p>
                   )}
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
                     Priority
                   </label>
 
@@ -688,7 +907,7 @@ function Issues() {
                     name="priority"
                     value={formData.priority}
                     onChange={handleChange}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-orange-400"
                   >
                     <option value="critical">Critical</option>
                     <option value="high">High</option>
@@ -698,10 +917,10 @@ function Issues() {
                 </div>
               </div>
 
-              {/* Assignee — Admin only */}
+              {/* ASSIGNEE — ADMIN ONLY */}
               {isAdmin && (
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
                     Assign To
                   </label>
 
@@ -710,7 +929,7 @@ function Issues() {
                     value={formData.assignedTo}
                     onChange={handleChange}
                     disabled={!formData.projectId || membersLoading}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-blue-500 disabled:bg-gray-100"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-orange-400 disabled:bg-slate-100"
                   >
                     <option value="">
                       {membersLoading
@@ -725,16 +944,16 @@ function Issues() {
                     ))}
                   </select>
 
-                  <p className="mt-1 text-xs text-gray-400">
+                  <p className="mt-1 text-[11px] text-slate-400">
                     Only members assigned to this project are available.
                   </p>
                 </div>
               )}
 
-              {/* Status — Edit only */}
+              {/* STATUS — EDIT ONLY */}
               {editingIssue && (
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
                     Status
                   </label>
 
@@ -742,7 +961,7 @@ function Issues() {
                     name="status"
                     value={formData.status}
                     onChange={handleChange}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-orange-400"
                   >
                     <option value="open">Open</option>
                     <option value="in_progress">In Progress</option>
@@ -752,13 +971,14 @@ function Issues() {
                 </div>
               )}
 
-              {/* Footer */}
-              <div className="flex justify-end gap-3 border-t border-gray-200 pt-5">
+              {/* FOOTER */}
+              <div className="flex justify-end gap-3 border-t border-slate-100 pt-5">
+
                 <button
                   type="button"
                   onClick={handleCloseModal}
                   disabled={submitting}
-                  className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -766,8 +986,12 @@ function Issues() {
                 <button
                   type="submit"
                   disabled={submitting || membersLoading}
-                  className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-xl bg-orange-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
+                  {submitting && (
+                    <LoaderCircle size={16} className="animate-spin" />
+                  )}
+
                   {submitting
                     ? "Saving..."
                     : editingIssue
@@ -780,139 +1004,162 @@ function Issues() {
         </div>
       )}
 
-      {/* View Issue Details Modal */}
+      {/* VIEW ISSUE DETAILS MODAL */}
       {selectedIssue && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white shadow-xl">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">
-                  Issue Details
-                </h2>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
 
-                <p className="mt-1 text-sm text-gray-500">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[25px] bg-white shadow-2xl">
+
+            <div className="flex items-center justify-between border-b border-slate-100 p-5 sm:p-6">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-orange-600">
+                  Issue details
+                </span>
+
+                <h2 className="mt-1 text-xl font-bold text-slate-900">
                   Issue #{selectedIssue.id}
-                </p>
+                </h2>
               </div>
 
               <button
+                type="button"
                 onClick={() => setSelectedIssue(null)}
-                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
+                className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
               >
                 <X size={20} />
               </button>
             </div>
 
-            {/* Issue Information */}
-            <div className="space-y-6 p-6">
-              <div>
-                <p className="text-sm font-medium text-gray-500">
-                  Issue Title
-                </p>
+            <div className="space-y-6 p-5 sm:p-6">
 
-                <h3 className="mt-2 text-lg font-semibold text-gray-900">
+              {/* ISSUE TITLE */}
+              <div className="rounded-2xl bg-orange-50 p-4">
+                <div className="flex items-center gap-2">
+                  <ClipboardList size={17} className="text-orange-700" />
+
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-orange-700">
+                    Issue title
+                  </span>
+                </div>
+
+                <h3 className="mt-2 break-words text-lg font-bold text-slate-900">
                   {selectedIssue.title}
                 </h3>
               </div>
 
+              {/* DESCRIPTION */}
               <div>
-                <p className="text-sm font-medium text-gray-500">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                   Description
                 </p>
 
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-700">
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">
                   {selectedIssue.description ||
                     "No description provided."}
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">
+              {/* PRIORITY AND STATUS */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+                <div className="rounded-xl border border-slate-100 p-4">
+                  <p className="text-xs font-medium text-slate-400">
                     Priority
                   </p>
 
                   <span
-                    className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-medium capitalize ${getPriorityStyle(selectedIssue.priority)}`}
+                    className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold capitalize ${getPriorityStyle(selectedIssue.priority)}`}
                   >
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${getPriorityDot(selectedIssue.priority)}`}
+                    />
                     {selectedIssue.priority}
                   </span>
                 </div>
 
-                <div>
-                  <p className="text-sm font-medium text-gray-500">
+                <div className="rounded-xl border border-slate-100 p-4">
+                  <p className="text-xs font-medium text-slate-400">
                     Status
                   </p>
 
                   <span
-                    className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-medium capitalize ${getStatusStyle(selectedIssue.status)}`}
+                    className={`mt-2 inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold capitalize ${getStatusStyle(selectedIssue.status)}`}
                   >
                     {formatStatus(selectedIssue.status)}
                   </span>
                 </div>
               </div>
 
-              <div>
-                <p className="text-sm font-medium text-gray-500">
-                  Project
-                </p>
+              {/* PROJECT */}
+              <div className="rounded-xl border border-slate-100 p-4">
+                <div className="flex items-center gap-2">
+                  <FolderKanban size={16} className="text-orange-600" />
 
-                <p className="mt-2 text-sm font-medium text-gray-900">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Project
+                  </p>
+                </div>
+
+                <p className="mt-2 text-sm font-semibold text-slate-800">
                   {selectedIssue.project_name || "Unknown project"}
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">
+              {/* ASSIGNED AND CREATOR */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+                <div className="rounded-xl border border-slate-100 p-4">
+                  <p className="text-xs font-medium text-slate-400">
                     Assigned To
                   </p>
 
-                  <p className="mt-2 text-sm text-gray-900">
+                  <p className="mt-2 text-sm font-semibold text-slate-800">
                     {selectedIssue.assignee_name || "Unassigned"}
                   </p>
                 </div>
 
-                <div>
-                  <p className="text-sm font-medium text-gray-500">
+                <div className="rounded-xl border border-slate-100 p-4">
+                  <p className="text-xs font-medium text-slate-400">
                     Created By
                   </p>
 
-                  <p className="mt-2 text-sm text-gray-900">
+                  <p className="mt-2 text-sm font-semibold text-slate-800">
                     {selectedIssue.creator_name || "Unknown"}
                   </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-5 border-t border-gray-200 pt-5 sm:grid-cols-2">
+              {/* DATES */}
+              <div className="grid grid-cols-1 gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2">
+
                 <div>
-                  <p className="text-sm font-medium text-gray-500">
+                  <p className="text-xs font-medium text-slate-400">
                     Created At
                   </p>
 
-                  <p className="mt-2 text-sm text-gray-700">
+                  <p className="mt-2 text-sm text-slate-700">
                     {formatDate(selectedIssue.created_at)}
                   </p>
                 </div>
 
                 <div>
-                  <p className="text-sm font-medium text-gray-500">
+                  <p className="text-xs font-medium text-slate-400">
                     Last Updated
                   </p>
 
-                  <p className="mt-2 text-sm text-gray-700">
+                  <p className="mt-2 text-sm text-slate-700">
                     {formatDate(selectedIssue.updated_at)}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="flex justify-end border-t border-gray-200 px-6 py-4">
+            {/* MODAL FOOTER */}
+            <div className="flex justify-end border-t border-slate-100 p-5 sm:px-6">
               <button
+                type="button"
                 onClick={() => setSelectedIssue(null)}
-                className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+                className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
               >
                 Close
               </button>

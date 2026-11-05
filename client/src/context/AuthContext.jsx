@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useState,
+  useCallback,
 } from "react";
 
 import {
@@ -17,30 +18,44 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const response = await getCurrentUser();
+  // Check whether the user is already authenticated
+  const checkAuth = useCallback(async () => {
+    try {
+      const response = await getCurrentUser();
 
-        const storedUser = JSON.parse(
-          localStorage.getItem("user") || "{}"
-        );
+      const storedUser = JSON.parse(
+        localStorage.getItem("user") || "{}"
+      );
 
-        setUser({
-          ...storedUser,
-          ...response.user,
-        });
-      } catch (error) {
-        localStorage.removeItem("user");
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+      const currentUser = {
+        ...storedUser,
+        ...response.user,
+      };
 
-    checkAuth();
+      setUser(currentUser);
+      localStorage.setItem("user", JSON.stringify(currentUser));
+
+      return currentUser;
+    } catch (error) {
+      localStorage.removeItem("user");
+      setUser(null);
+
+      return null;
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  // Update user after login or registration
+  const refreshUser = async () => {
+    return await checkAuth();
+  };
+
+  // Logout the authenticated user
   const logout = async () => {
     try {
       await logoutUser();
@@ -52,7 +67,13 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, setUser, loading, logout }}
+      value={{
+        user,
+        setUser,
+        loading,
+        logout,
+        refreshUser,
+      }}
     >
       {children}
     </AuthContext.Provider>
